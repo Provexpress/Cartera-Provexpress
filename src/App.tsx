@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  X,
   Zap,
 } from 'lucide-react';
 import type {
@@ -53,11 +54,12 @@ import { CarteraTable } from './components/CarteraTable';
 import { GroupsView } from './components/GroupsView';
 import { RecibosCajaView } from './components/RecibosCajaView';
 import { NotasCreditoView } from './components/NotasCreditoView';
+import { EvolucionBaseView } from './components/EvolucionBaseView';
 import { GestionDiaADiaView } from './components/GestionDiaADiaView';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { EmailNotificationModal } from './components/EmailNotificationModal';
 
-type ViewMode = 'dashboard' | 'gestion' | 'facturas' | 'grupos' | 'recibos' | 'notas';
+type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
 type DatePreset = 'today' | 'current_month' | 'last_month' | 'custom';
 
 const AGING_ORDER: AgeBucketKey[] = [
@@ -69,6 +71,49 @@ const AGING_ORDER: AgeBucketKey[] = [
   '121_180',
   'MAS_180',
 ];
+
+interface SelectFilterOption {
+  value: string;
+  label: string;
+}
+
+function SelectFilter({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  compact = false,
+  hint,
+}: {
+  label: string;
+  value: string;
+  options: SelectFilterOption[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  compact?: boolean;
+  hint?: string;
+}) {
+  return (
+    <label className={`select-filter ${compact ? 'compact' : ''} ${disabled ? 'disabled' : ''}`} title={hint}>
+      <span>{label}</span>
+      <div>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={14} />
+      </div>
+    </label>
+  );
+}
 
 export function App() {
   const [loading, setLoading] = useState(true);
@@ -492,14 +537,17 @@ export function App() {
 
         <div className="hero-banner" style={{ marginBottom: 20 }}>
           <div className="hero-left">
-            <div className="eyebrow blue">
-              <Zap size={15} /> Provexpress Cartera · Corte al {fechaFinal}
+            <div className={`eyebrow ${view === 'evolucion' ? 'purple' : view === 'gestion' ? 'green' : 'blue'}`}>
+              {view === 'evolucion' ? <TrendingUp size={15} /> : view === 'gestion' ? <CalendarRange size={15} /> : <Zap size={15} />}
+              <span>Provexpress Cartera · Corte al {fechaFinal}</span>
             </div>
             <h1 style={{ fontSize: 32, margin: '10px 0 6px', fontWeight: 800, letterSpacing: '-0.04em' }}>
-              {view === 'dashboard'
-                ? 'Tablero General de Edades'
+              {view === 'evolucion'
+                ? 'Evolución de la Base Inicial (06/10)'
                 : view === 'gestion'
-                ? 'Gestión de Cartera Día a Día'
+                ? 'Gestión de Cartera Día a Día (Desde 07/10)'
+                : view === 'dashboard'
+                ? 'Tablero General de Edades'
                 : view === 'facturas'
                 ? 'Detalle de Facturas y Saldos'
                 : view === 'grupos'
@@ -509,14 +557,40 @@ export function App() {
                 : 'Notas Crédito y Ajustes'}
             </h1>
             <p style={{ margin: 0, color: '#6e6e73', fontSize: 14 }}>
-              {view === 'gestion'
-                ? 'Seguimiento de facturas saldadas/matadas por Recibos de Caja desde el corte base del 06 de octubre de 2026.'
+              {view === 'evolucion'
+                ? 'Desmonte exclusivo de la cartera recibida al 06 de octubre de 2026. Seguimiento a la base inicial entregada al equipo comercial.'
+                : view === 'gestion'
+                ? 'Operación diaria del proceso desde el 07 de octubre de 2026: facturas matadas por Recibos de Caja, abonos y nuevas facturas emitidas.'
+                : view === 'dashboard'
+                ? 'Panorama consolidado por edades de vencimiento: Corriente, 1-30, 31-60, 61-90, 91-120, 121-180 y +180 días.'
                 : 'Seguimiento integral de cuentas por cobrar, vencimientos, cupos y gestión comercial en tiempo real.'}
             </p>
           </div>
 
           {/* BOTONES DE VISTA: SEGMENTED NAV ESTILO REMISIONES (APPLE MAC OS) */}
-          <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ marginTop: 18, alignSelf: 'flex-start' }}>
+          <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ marginTop: 18, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={view === 'evolucion' ? 'active' : ''}
+              onClick={() => setView('evolucion')}
+              title="Seguimiento exclusivo a la cartera recibida al 06/10/2026 (Base fija entregada)"
+            >
+              <TrendingUp size={15} />
+              <span>Evolución (Base 06/10)</span>
+              <span className="nav-tab-badge purple">Base 06/10</span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'gestion' ? 'active' : ''}
+              onClick={() => setView('gestion')}
+              title="Gestión operativa día a día desde el 07 de octubre (Facturas matadas con recibo y nuevas emisiones)"
+            >
+              <CalendarRange size={15} />
+              <span>Gestión (Desde 07/10)</span>
+              <span className="nav-tab-badge green">Proceso 07/10</span>
+            </button>
+
             <button
               type="button"
               className={view === 'dashboard' ? 'active' : ''}
@@ -525,17 +599,6 @@ export function App() {
             >
               <LayoutDashboard size={15} />
               <span>Tablero & Edades</span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'gestion' ? 'active' : ''}
-              onClick={() => setView('gestion')}
-              title="Gestión operativa día a día desde 06/10: Facturas matadas por recibos de caja"
-            >
-              <CalendarRange size={15} />
-              <span>Gestión Día a Día</span>
-              <span className="nav-tab-badge green">Desde 06/10</span>
             </button>
 
             <button
@@ -589,104 +652,235 @@ export function App() {
           </nav>
         </div>
 
-        {/* 3. BARRA DE FILTROS SUPERIOR (REACTIVA) */}
-        <section className="filter-bar" style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="filter-field">
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase' }}>
-              Grupo Comercial
-            </label>
-            <select
-              className="select-input"
-              value={selectedGrupo}
-              onChange={(e) => {
-                const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
-                setSelectedGrupo(val);
-                setSelectedExecutive('all');
-              }}
-            >
-              <option value="all">Todos los Grupos</option>
-              <option value="1">Grupo 1 (Rafael Novoa)</option>
-              <option value="2">Grupo 2 (Angélica Caballero)</option>
-              <option value="3">Grupo 3 (Óscar Beltrán)</option>
-              <option value="4">Grupo 4 (Miller Romero)</option>
-              <option value="0">Gerencia / Especiales</option>
-            </select>
-          </div>
+        {/* NOTIFICACIÓN DE PROCESO DIARIO ESTILO REMISIONES */}
+        {(view === 'evolucion' || view === 'gestion') && (
+          <section className="new-cutoff-notification-banner" aria-label="Notificación de proceso diario">
+            <div className="new-cutoff-banner-left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="new-cutoff-pulse" />
+              <CalendarRange size={18} />
+              <div>
+                <strong>
+                  {view === 'evolucion'
+                    ? 'Estás en la Evolución de la Base Inicial Recibida (06/10/2026)'
+                    : 'Estás en la Gestión Diaria del Proceso (Desde el 07/10/2026)'}
+                </strong>
+                <span style={{ fontSize: 12.5, color: '#4b5563', display: 'block', marginTop: 1 }}>
+                  {view === 'evolucion'
+                    ? 'Cartera recibida de partida: 3.157 facturas · Desmonte cronológico con recibos de caja'
+                    : 'Seguimiento en vivo: facturas matadas por Recibos de Caja y nuevas facturas emitidas'}
+                </span>
+              </div>
+            </div>
+            <div className="new-cutoff-banner-actions">
+              {view === 'evolucion' ? (
+                <button
+                  type="button"
+                  className="button button-primary cutoff-cta-btn"
+                  onClick={() => setView('gestion')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                >
+                  <CalendarRange size={14} /> Ver Gestión del Proceso (Desde 07/10) →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button button-outline-purple cutoff-cta-btn"
+                  onClick={() => setView('evolucion')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                >
+                  <TrendingUp size={14} /> Ver Desmonte en Evolución (Base 06/10) →
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
-          <div className="filter-field">
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase' }}>
-              Director Comercial
-            </label>
-            <select
-              className="select-input"
-              value={selectedDirector}
-              onChange={(e) => setSelectedDirector(e.target.value)}
-            >
-              <option value="all">Todos los Directores</option>
-              {LISTA_DIRECTORES.map((d) => (
-                <option key={d.email} value={d.nombre}>
-                  {d.nombre} (Grupo {d.grupo})
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* 3. BARRA DE FILTROS SUPERIOR ESTILO REMISIONES (APPLE MAC OS) */}
+        <section className="filter-bar" aria-label="Filtros del tablero" style={{ marginBottom: activeFiltersCount > 0 ? 10 : 20 }}>
+          <SelectFilter
+            label="Grupo Comercial"
+            value={String(selectedGrupo)}
+            onChange={(val) => {
+              setSelectedGrupo(val === 'all' ? 'all' : Number(val));
+              setSelectedExecutive('all');
+            }}
+            options={[
+              { value: 'all', label: 'Todos los Grupos' },
+              { value: '1', label: 'Grupo 1 (Rafael Novoa)' },
+              { value: '2', label: 'Grupo 2 (Angélica Caballero)' },
+              { value: '3', label: 'Grupo 3 (Óscar Beltrán)' },
+              { value: '4', label: 'Grupo 4 (Miller Romero)' },
+              { value: '0', label: 'Gerencia / Especiales' },
+            ]}
+          />
 
-          <div className="filter-field">
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase' }}>
-              Ejecutivo / Vendedor
-            </label>
-            <select
-              className="select-input"
-              value={selectedExecutive}
-              onChange={(e) => setSelectedExecutive(e.target.value)}
-            >
-              <option value="all">Todos los Ejecutivos</option>
-              {availableExecutives.map((exec) => (
-                <option key={exec} value={exec}>
-                  {exec}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectFilter
+            label="Director Comercial"
+            value={selectedDirector}
+            onChange={(val) => setSelectedDirector(val)}
+            options={[
+              { value: 'all', label: 'Todos los Directores' },
+              ...LISTA_DIRECTORES.map((d) => ({
+                value: d.nombre,
+                label: `${d.nombre} (Grupo ${d.grupo})`,
+              })),
+            ]}
+          />
 
-          <div className="filter-field">
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase' }}>
-              Estado Cliente
-            </label>
-            <select
-              className="select-input"
-              value={selectedEstado}
-              onChange={(e) => setSelectedEstado(e.target.value)}
-            >
-              <option value="all">Todos los Estados</option>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-              <option value="Bloqueado">Bloqueado</option>
-            </select>
-          </div>
+          <SelectFilter
+            label="Ejecutivo / Vendedor"
+            value={selectedExecutive}
+            onChange={(val) => setSelectedExecutive(val)}
+            options={[
+              { value: 'all', label: 'Todos los Ejecutivos' },
+              ...availableExecutives.map((exec) => ({
+                value: exec,
+                label: exec,
+              })),
+            ]}
+          />
 
-          <div className="filter-field checkbox-field" style={{ alignSelf: 'flex-end', paddingBottom: 6 }}>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={onlyOverdue}
-                onChange={(e) => setOnlyOverdue(e.target.checked)}
-              />
-              <span style={{ fontWeight: 600, color: '#b91c1c' }}>Solo Cartera Vencida</span>
-            </label>
-          </div>
+          <SelectFilter
+            label="Estado Cliente"
+            value={selectedEstado}
+            onChange={(val) => setSelectedEstado(val)}
+            options={[
+              { value: 'all', label: 'Todos los Estados' },
+              { value: 'Activo', label: 'Activo' },
+              { value: 'Inactivo', label: 'Inactivo' },
+              { value: 'Bloqueado', label: 'Bloqueado' },
+            ]}
+          />
 
-          {activeFiltersCount > 0 && (
+          <SelectFilter
+            label="Antigüedad / Días"
+            value={selectedAging}
+            onChange={(val) => setSelectedAging(val as AgeBucketKey | 'all')}
+            options={[
+              { value: 'all', label: 'Todas las Edades' },
+              { value: 'CORRIENTE', label: 'Corriente (Al día)' },
+              { value: '1_30', label: '1 a 30 días' },
+              { value: '31_60', label: '31 a 60 días' },
+              { value: '61_90', label: '61 a 90 días' },
+              { value: '91_120', label: '91 a 120 días' },
+              { value: '121_180', label: '121 a 180 días' },
+              { value: 'MAS_180', label: 'Más de 180 días' },
+            ]}
+          />
+
+          <div style={{ alignSelf: 'flex-end', paddingBottom: 2 }}>
             <button
               type="button"
-              className="clear-filters-btn"
-              onClick={clearAllFilters}
-              style={{ alignSelf: 'flex-end', marginBottom: 6 }}
+              className={`filter-pill-chip ${onlyOverdue ? 'active-danger' : ''}`}
+              onClick={() => setOnlyOverdue(!onlyOverdue)}
+              style={{
+                height: 38,
+                borderRadius: 10,
+                padding: '0 14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: onlyOverdue ? '#fee2e2' : '#f5f5f7',
+                border: `1.5px solid ${onlyOverdue ? '#ef4444' : '#d2d2d7'}`,
+                color: onlyOverdue ? '#b91c1c' : '#4b5563',
+                fontWeight: 650,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxSizing: 'border-box',
+                transition: 'all 0.15s ease',
+              }}
+              title={onlyOverdue ? 'Toca para ver toda la cartera' : 'Filtrar solo facturas vencidas'}
             >
-              Limpiar filtros ({activeFiltersCount})
+              <ShieldAlert size={14} color={onlyOverdue ? '#b91c1c' : '#6b7280'} />
+              <span>{onlyOverdue ? 'Filtrado: Solo Vencidas' : 'Solo Cartera Vencida'}</span>
             </button>
-          )}
+          </div>
         </section>
+
+        {/* 3.1 CHIPS DE FILTROS ACTIVOS ESTILO REMISIONES */}
+        {activeFiltersCount > 0 && (
+          <section className="active-filters-bar" aria-label="Filtros aplicados" style={{ marginBottom: 20 }}>
+            <div className="active-filters-title">
+              <Filter size={14} />
+              <span>Filtros activos ({activeFiltersCount}):</span>
+            </div>
+            <div className="active-pills-wrap" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {selectedGrupo !== 'all' && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setSelectedGrupo('all')}
+                  title="Quitar filtro de grupo"
+                >
+                  <span>Grupo: <b>{selectedGrupo === 0 ? 'Gerencia' : `Grupo ${selectedGrupo}`}</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              {selectedDirector !== 'all' && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setSelectedDirector('all')}
+                  title="Quitar filtro de director"
+                >
+                  <span>Director: <b>{selectedDirector}</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              {selectedExecutive !== 'all' && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setSelectedExecutive('all')}
+                  title="Quitar filtro de ejecutivo"
+                >
+                  <span>Ejecutivo: <b>{selectedExecutive}</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              {selectedEstado !== 'all' && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setSelectedEstado('all')}
+                  title="Quitar filtro de estado"
+                >
+                  <span>Estado: <b>{selectedEstado}</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              {onlyOverdue && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setOnlyOverdue(false)}
+                  title="Quitar filtro de vencidas"
+                >
+                  <span>Solo: <b>Vencidas</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              {selectedAging !== 'all' && (
+                <button
+                  type="button"
+                  className="filter-pill-chip"
+                  onClick={() => setSelectedAging('all')}
+                  title="Quitar filtro de edad"
+                >
+                  <span>Edad: <b>{AGING_CONFIG[selectedAging]?.label || selectedAging}</b></span>
+                  <X size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="clear-all-pill"
+                onClick={clearAllFilters}
+              >
+                Limpiar todos los filtros
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* 4. CONTENIDO SEGÚN LA VISTA SELECCIONADA */}
         {carteraData && filteredMetrics && (
@@ -734,7 +928,18 @@ export function App() {
               </>
             )}
 
-            {/* VISTA 2: GESTIÓN OPERATIVA DÍA A DÍA (BASE 06/10) */}
+            {/* VISTA 1: EVOLUCIÓN DE LA BASE INICIAL (CORTE 06/10) */}
+            {view === 'evolucion' && (
+              <EvolucionBaseView
+                records={filteredRecords}
+                recibos={filteredRecibos}
+                fechaBase="2026-10-06"
+                onSelectRecord={setSelectedInvoice}
+                onNavigateToGestion={() => setView('gestion')}
+              />
+            )}
+
+            {/* VISTA 2: GESTIÓN OPERATIVA DÍA A DÍA (DESDE 07/10) */}
             {view === 'gestion' && (
               <GestionDiaADiaView
                 records={filteredRecords}
@@ -743,6 +948,7 @@ export function App() {
                 onSelectRecord={setSelectedInvoice}
                 onSync={() => loadData()}
                 isLoading={loading}
+                onNavigateToEvolucion={() => setView('evolucion')}
               />
             )}
 
@@ -755,11 +961,11 @@ export function App() {
               />
             )}
 
-            {/* VISTA 4: GRUPOS Y DIRECTORES */}
+            {/* VISTA 4: GRUPOS Y DIRECTORES (REACTIVO A FILTROS) */}
             {view === 'grupos' && (
               <GroupsView
-                groups={carteraData.groupsSummary}
-                executives={carteraData.executivesSummary}
+                groups={filteredMetrics.groups}
+                executives={filteredMetrics.executives}
                 onFilterGroup={(g) => {
                   setSelectedGrupo(g);
                   setView('facturas');

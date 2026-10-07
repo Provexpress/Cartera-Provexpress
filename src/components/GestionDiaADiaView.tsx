@@ -45,6 +45,7 @@ interface Props {
   onSelectRecord?: (record: CarteraRecord) => void;
   onSync?: () => Promise<void>;
   isLoading?: boolean;
+  onNavigateToEvolucion?: () => void;
 }
 
 interface CohortPoint {
@@ -87,6 +88,7 @@ export function GestionDiaADiaView({
   onSelectRecord,
   onSync,
   isLoading = false,
+  onNavigateToEvolucion,
 }: Props) {
   // Estado de controles de Desmonte y Gráfica
   const [selectedCutoff, setSelectedCutoff] = useState<string>(fechaBase);
@@ -402,6 +404,71 @@ export function GestionDiaADiaView({
 
   return (
     <div className="gestion-view-container" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* ─── BANNER SUPERIOR INFORMATIVO DEL PROCESO OPERATIVO (DESDE 07/10) ─── */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+          padding: '16px 22px',
+          background: 'linear-gradient(135deg, #F0FDF4 0%, #EFF6FF 100%)',
+          border: '1.5px solid #86EFAC',
+          borderRadius: 16,
+          boxShadow: '0 2px 10px rgba(34, 197, 94, 0.08)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              backgroundColor: '#16A34A',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(22, 163, 74, 0.35)',
+            }}
+          >
+            <CalendarRange size={22} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="evolution-chip latest" style={{ fontSize: 11, padding: '2px 8px' }}>
+                Proceso Diario Activo
+              </span>
+              <strong style={{ fontSize: 16, color: '#166534' }}>
+                Gestión Operativa del Proceso (Desde el 07 de Octubre de 2026)
+              </strong>
+            </div>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: '#15803D' }}>
+              Base inicial de partida al 06/10: <strong>{formatNumber(initialBaseRecords.length)} facturas</strong> ({formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}). Movimientos del día a día: facturas matadas por Recibos de Caja y nuevas emisiones.
+            </p>
+          </div>
+        </div>
+
+        {onNavigateToEvolucion && (
+          <button
+            type="button"
+            className="button button-sm button-secondary"
+            onClick={onNavigateToEvolucion}
+            style={{
+              backgroundColor: '#FAF5FF',
+              borderColor: '#D8B4FE',
+              color: '#7E22CE',
+              fontWeight: 700,
+            }}
+            title="Ver desmonte exclusivo de la cohorte recibida al 06/10"
+          >
+            <TrendingDown size={14} />
+            <span>Ver Desmonte en Evolución (Base 06/10) →</span>
+          </button>
+        )}
+      </div>
+
       {/* ─── SECCIÓN 1: SEGUIMIENTO CRONOLÓGICO DEL DESMONTE DE LA BASE INICIAL ─── */}
       <div className="management-daily-history-card">
         <div className="management-table-header">
@@ -800,15 +867,58 @@ export function GestionDiaADiaView({
           )}
         </div>
 
-        {/* 2.2 Tarjetas Operativas Directas (Lo que Salió, Lo que Entró, Total en Cartera) */}
+        {/* 2.2 Tarjetas Operativas Directas (Base Recibida, Lo que Salió, Lo que Entró, Total en Cartera) */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
             gap: 16,
             marginBottom: 20,
           }}
         >
+          {/* Tarjeta 0: BASE RECIBIDA DE PARTIDA (AL 06/10) */}
+          <div
+            onClick={onNavigateToEvolucion}
+            style={{
+              backgroundColor: '#FAF5FF',
+              border: '1.5px solid #E9D5FF',
+              borderRadius: 14,
+              padding: '18px 20px',
+              cursor: onNavigateToEvolucion ? 'pointer' : 'default',
+              transition: 'all 0.15s ease',
+            }}
+            title="Toca para ver el desmonte en Evolución"
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#7E22CE', textTransform: 'uppercase' }}>
+                📁 Base Recibida (06/10)
+              </span>
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  backgroundColor: '#F3E8FF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#9333EA',
+                }}
+              >
+                <Layers size={20} />
+              </div>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#6B21A8', marginBottom: 4 }}>
+              {formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 750, color: '#7E22CE' }}>
+              {formatNumber(initialBaseRecords.length)} facturas entregadas
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+              Lote de partida recibido al inicio de la gestión
+            </div>
+          </div>
+
           {/* Tarjeta 1: LO QUE SALIÓ (FACTURAS MATADAS POR RECIBOS DE CAJA) */}
           <div
             onClick={() => setActiveTab('salientes')}
