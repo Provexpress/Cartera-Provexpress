@@ -4,6 +4,7 @@ import {
   Building,
   Calendar,
   CalendarClock,
+  CalendarRange,
   CheckCircle2,
   ChevronDown,
   Download,
@@ -25,13 +26,17 @@ import {
 } from 'lucide-react';
 import type {
   AgeBucketKey,
+  AgingSummaryItem,
   CarteraDataState,
   CarteraRecord,
+  CustomerSummary,
   ExecutiveSummary,
   GroupSummary,
   UserProfile,
 } from './types';
 import {
+  AGING_CONFIG,
+  computeCarteraMetrics,
   fetchCarteraCompleta,
   formatCompactCurrency,
   formatCurrency,
@@ -48,11 +53,22 @@ import { CarteraTable } from './components/CarteraTable';
 import { GroupsView } from './components/GroupsView';
 import { RecibosCajaView } from './components/RecibosCajaView';
 import { NotasCreditoView } from './components/NotasCreditoView';
+import { GestionDiaADiaView } from './components/GestionDiaADiaView';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { EmailNotificationModal } from './components/EmailNotificationModal';
 
-type ViewMode = 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
+type ViewMode = 'dashboard' | 'gestion' | 'facturas' | 'grupos' | 'recibos' | 'notas';
 type DatePreset = 'today' | 'current_month' | 'last_month' | 'custom';
+
+const AGING_ORDER: AgeBucketKey[] = [
+  'CORRIENTE',
+  '1_30',
+  '31_60',
+  '61_90',
+  '91_120',
+  '121_180',
+  'MAS_180',
+];
 
 export function App() {
   const [loading, setLoading] = useState(true);
@@ -86,7 +102,7 @@ export function App() {
   const [emailTargetGroup, setEmailTargetGroup] = useState<GroupSummary | undefined>();
   const [emailTargetExec, setEmailTargetExec] = useState<ExecutiveSummary | undefined>();
 
-  // Carga inicial de sesión M365
+  // Carga inicial de sesión M365 (segura, no bloquea si no está disponible)
   useEffect(() => {
     getExistingProfile()
       .then((p) => {
@@ -143,43 +159,52 @@ export function App() {
     }
   };
 
-  // Filtrado de registros en memoria
-  const filteredRecords = useMemo(() => {
-    if (!carteraData) return [];
-    let list = carteraData.records;
+  // ─── CÁLCULO DINÁMICO Y REACTIVO DE MÉTRICAS FILTRADAS ─────────────────────
+  // Se filtran los datos según Grupo, Director, Ejecutivo, Estado y Solo Vencidas
+  const filteredMetrics = useMemo(() => {
+    if (!carteraData) return null;
 
-    if (selectedAging !== 'all') {
-      list = list.filter((r) => r.categoriaEdad === selectedAging);
-    }
+    let baseList = carteraData.records;
 
     if (selectedGrupo !== 'all') {
-      list = list.filter((r) => r.grupoNumero === selectedGrupo);
+      baseList = baseList.filter((r) => r.grupoNumero === selectedGrupo);
     }
-
     if (selectedDirector !== 'all') {
-      list = list.filter(
+      baseList = baseList.filter(
         (r) => r.directorNombre.toLowerCase() === selectedDirector.toLowerCase()
       );
     }
-
     if (selectedExecutive !== 'all') {
-      list = list.filter(
+      baseList = baseList.filter(
         (r) => r.Nombre_Empleado.toLowerCase() === selectedExecutive.toLowerCase()
       );
     }
-
     if (selectedEstado !== 'all') {
-      list = list.filter((r) => r.Estado_Cliente.toLowerCase() === selectedEstado.toLowerCase());
+      baseList = baseList.filter(
+        (r) => r.Estado_Cliente.toLowerCase() === selectedEstado.toLowerCase()
+      );
     }
-
     if (onlyOverdue) {
-      list = list.filter((r) => r.estaVencida);
+      baseList = baseList.filter((r) => r.estaVencida);
     }
 
-    return list;
+    const metrics = computeCarteraMetrics(baseList);
+
+    return {
+      baseList,
+      totalSaldo: metrics.totalSaldo,
+      totalCorriente: metrics.totalCorriente,
+      totalVencido: metrics.totalVencido,
+      porcentajeVencido: metrics.porcentajeVencido,
+      totalDocumentos: metrics.totalDocumentos,
+      clientesUnicos: metrics.clientesUnicos,
+      agingItems: metrics.agingBreakdown,
+      groups: metrics.groupsSummary,
+      executives: metrics.executivesSummary,
+      customers: metrics.customersSummary,
+    };
   }, [
     carteraData,
-    selectedAging,
     selectedGrupo,
     selectedDirector,
     selectedExecutive,
@@ -187,7 +212,44 @@ export function App() {
     onlyOverdue,
   ]);
 
-  // Lista de ejecutivos disponibles para el filtro
+  // Lista de facturas filtradas incluyendo la tarjeta de edad seleccionada
+  const filteredRecords = useMemo(() => {
+    if (!filteredMetrics) return [];
+    if (selectedAging === 'all') return filteredMetrics.baseList;
+    return filteredMetrics.baseList.filter((r) => r.categoriaEdad === selectedAging);
+  }, [filteredMetrics, selectedAging]);
+
+  // Recibos de caja filtrados reactivamente según grupo comercial y director
+  const filteredRecibos = useMemo(() => {
+    if (!carteraData) return [];
+    let list = carteraData.recibos;
+    if (selectedGrupo !== 'all') {
+      list = list.filter((r) => r.grupoNumero === selectedGrupo);
+    }
+    if (selectedDirector !== 'all') {
+      list = list.filter(
+        (r) => (r.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
+      );
+    }
+    return list;
+  }, [carteraData, selectedGrupo, selectedDirector]);
+
+  // Notas crédito filtradas reactivamente según grupo comercial y director
+  const filteredNotas = useMemo(() => {
+    if (!carteraData) return [];
+    let list = carteraData.notas;
+    if (selectedGrupo !== 'all') {
+      list = list.filter((n) => n.grupoNumero === selectedGrupo);
+    }
+    if (selectedDirector !== 'all') {
+      list = list.filter(
+        (n) => (n.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
+      );
+    }
+    return list;
+  }, [carteraData, selectedGrupo, selectedDirector]);
+
+    // Lista de ejecutivos disponibles según el grupo seleccionado
   const availableExecutives = useMemo(() => {
     if (!carteraData) return [];
     const set = new Set<string>();
@@ -408,7 +470,7 @@ export function App() {
         </div>
       </header>
 
-      {/* 2. HERO BANNER Y NAVEGACIÓN PRINCIPAL */}
+      {/* 2. HERO BANNER Y NAVEGACIÓN SEGMENTADA APPLE */}
       <main className="content-container" style={{ width: 'min(1560px, calc(100% - 32px))', margin: '24px auto' }}>
         {error && (
           <div className="welcome-error" style={{ marginBottom: 20 }}>
@@ -436,6 +498,8 @@ export function App() {
             <h1 style={{ fontSize: 32, margin: '10px 0 6px', fontWeight: 800, letterSpacing: '-0.04em' }}>
               {view === 'dashboard'
                 ? 'Tablero General de Edades'
+                : view === 'gestion'
+                ? 'Gestión de Cartera Día a Día'
                 : view === 'facturas'
                 ? 'Detalle de Facturas y Saldos'
                 : view === 'grupos'
@@ -445,16 +509,19 @@ export function App() {
                 : 'Notas Crédito y Ajustes'}
             </h1>
             <p style={{ margin: 0, color: '#6e6e73', fontSize: 14 }}>
-              Seguimiento integral de cuentas por cobrar, vencimientos, cupos y gestión comercial en tiempo real.
+              {view === 'gestion'
+                ? 'Seguimiento de facturas saldadas/matadas por Recibos de Caja desde el corte base del 06 de octubre de 2026.'
+                : 'Seguimiento integral de cuentas por cobrar, vencimientos, cupos y gestión comercial en tiempo real.'}
             </p>
           </div>
 
-          {/* Selector de Vistas / Pestañas */}
-          <div className="tabs-bar" style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          {/* BOTONES DE VISTA: SEGMENTED NAV ESTILO REMISIONES (APPLE MAC OS) */}
+          <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ marginTop: 18, alignSelf: 'flex-start' }}>
             <button
               type="button"
-              className={`tab-item ${view === 'dashboard' ? 'active' : ''}`}
+              className={view === 'dashboard' ? 'active' : ''}
               onClick={() => setView('dashboard')}
+              title="Resumen ejecutivo y edades de cartera"
             >
               <LayoutDashboard size={15} />
               <span>Tablero & Edades</span>
@@ -462,17 +529,33 @@ export function App() {
 
             <button
               type="button"
-              className={`tab-item ${view === 'facturas' ? 'active' : ''}`}
-              onClick={() => setView('facturas')}
+              className={view === 'gestion' ? 'active' : ''}
+              onClick={() => setView('gestion')}
+              title="Gestión operativa día a día desde 06/10: Facturas matadas por recibos de caja"
             >
-              <Layers size={15} />
-              <span>Facturas ({formatNumber(carteraData?.records.length || 0)})</span>
+              <CalendarRange size={15} />
+              <span>Gestión Día a Día</span>
+              <span className="nav-tab-badge green">Desde 06/10</span>
             </button>
 
             <button
               type="button"
-              className={`tab-item ${view === 'grupos' ? 'active' : ''}`}
+              className={view === 'facturas' ? 'active' : ''}
+              onClick={() => setView('facturas')}
+              title="Lista detallada de facturas abiertas"
+            >
+              <Layers size={15} />
+              <span>Facturas</span>
+              <span className="nav-tab-badge blue">
+                {formatNumber(filteredRecords.length)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'grupos' ? 'active' : ''}
               onClick={() => setView('grupos')}
+              title="Supervisión por grupos y directores comerciales"
             >
               <Building size={15} />
               <span>Grupos Comerciales</span>
@@ -480,25 +563,33 @@ export function App() {
 
             <button
               type="button"
-              className={`tab-item ${view === 'recibos' ? 'active' : ''}`}
+              className={view === 'recibos' ? 'active' : ''}
               onClick={() => setView('recibos')}
+              title="Recibos de caja y comprobantes de recaudo"
             >
               <CheckCircle2 size={15} />
-              <span>Recibos de Caja ({formatNumber(carteraData?.recibos.length || 0)})</span>
+              <span>Recibos de Caja</span>
+              <span className="nav-tab-badge green">
+                {formatNumber(filteredRecibos.length)}
+              </span>
             </button>
 
             <button
               type="button"
-              className={`tab-item ${view === 'notas' ? 'active' : ''}`}
+              className={view === 'notas' ? 'active' : ''}
               onClick={() => setView('notas')}
+              title="Notas crédito del período"
             >
               <Percent size={15} />
-              <span>Notas Crédito ({formatNumber(carteraData?.notas.length || 0)})</span>
+              <span>Notas Crédito</span>
+              <span className="nav-tab-badge purple">
+                {formatNumber(filteredNotas.length)}
+              </span>
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* 3. BARRA DE FILTROS SUPERIOR */}
+        {/* 3. BARRA DE FILTROS SUPERIOR (REACTIVA) */}
         <section className="filter-bar" style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="filter-field">
             <label style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase' }}>
@@ -598,27 +689,27 @@ export function App() {
         </section>
 
         {/* 4. CONTENIDO SEGÚN LA VISTA SELECCIONADA */}
-        {carteraData && (
+        {carteraData && filteredMetrics && (
           <>
-            {/* VISTA 1: DASHBOARD Y EDADES */}
+            {/* VISTA 1: TABLERO & EDADES (REACTIVO CON filteredMetrics) */}
             {view === 'dashboard' && (
               <>
                 <AgingCards
-                  totalSaldo={carteraData.totalSaldo}
-                  totalCorriente={carteraData.totalCorriente}
-                  totalVencido={carteraData.totalVencido}
-                  porcentajeVencido={carteraData.porcentajeVencido}
-                  totalDocumentos={carteraData.totalDocumentos}
-                  clientesUnicos={carteraData.clientesUnicos}
-                  agingItems={carteraData.agingBreakdown}
+                  totalSaldo={filteredMetrics.totalSaldo}
+                  totalCorriente={filteredMetrics.totalCorriente}
+                  totalVencido={filteredMetrics.totalVencido}
+                  porcentajeVencido={filteredMetrics.porcentajeVencido}
+                  totalDocumentos={filteredMetrics.totalDocumentos}
+                  clientesUnicos={filteredMetrics.clientesUnicos}
+                  agingItems={filteredMetrics.agingItems}
                   selectedAging={selectedAging}
                   onSelectAging={setSelectedAging}
                 />
 
                 <CarteraCharts
-                  agingItems={carteraData.agingBreakdown}
-                  groups={carteraData.groupsSummary}
-                  customers={carteraData.customersSummary}
+                  agingItems={filteredMetrics.agingItems}
+                  groups={filteredMetrics.groups}
+                  customers={filteredMetrics.customers}
                 />
 
                 <div className="dashboard-subtable-section" style={{ marginTop: 24 }}>
@@ -643,7 +734,17 @@ export function App() {
               </>
             )}
 
-            {/* VISTA 2: TABLA COMPLETA DE FACTURAS */}
+            {/* VISTA 2: GESTIÓN OPERATIVA DÍA A DÍA (BASE 06/10) */}
+            {view === 'gestion' && (
+              <GestionDiaADiaView
+                records={filteredRecords}
+                recibos={filteredRecibos}
+                fechaBase="2026-10-06"
+                onSelectRecord={setSelectedInvoice}
+              />
+            )}
+
+            {/* VISTA 3: TABLA COMPLETA DE FACTURAS */}
             {view === 'facturas' && (
               <CarteraTable
                 records={filteredRecords}
@@ -652,7 +753,7 @@ export function App() {
               />
             )}
 
-            {/* VISTA 3: GRUPOS Y DIRECTORES */}
+            {/* VISTA 4: GRUPOS Y DIRECTORES */}
             {view === 'grupos' && (
               <GroupsView
                 groups={carteraData.groupsSummary}
@@ -669,14 +770,14 @@ export function App() {
               />
             )}
 
-            {/* VISTA 4: RECIBOS DE CAJA */}
+            {/* VISTA 5: RECIBOS DE CAJA */}
             {view === 'recibos' && (
-              <RecibosCajaView recibos={carteraData.recibos} />
+              <RecibosCajaView recibos={filteredRecibos} />
             )}
 
-            {/* VISTA 5: NOTAS CRÉDITO */}
+            {/* VISTA 6: NOTAS CRÉDITO */}
             {view === 'notas' && (
-              <NotasCreditoView notas={carteraData.notas} />
+              <NotasCreditoView notas={filteredNotas} />
             )}
           </>
         )}

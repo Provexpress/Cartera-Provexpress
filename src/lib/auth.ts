@@ -27,17 +27,14 @@ const config: Configuration = {
 let msalApp: PublicClientApplication | null = null;
 let initialization: Promise<void> | null = null;
 
+export function isCryptoSupported(): boolean {
+  return typeof window !== 'undefined' && typeof window.crypto !== 'undefined' && !!window.crypto.subtle;
+}
+
 function getMsalInstance(): PublicClientApplication {
   if (!msalApp) {
-    if (
-      typeof window !== 'undefined' &&
-      !window.isSecureContext &&
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1'
-    ) {
-      console.warn(
-        'Aviso M365: El navegador bloquea Web Cryptography en conexiones HTTP no localhost. En producción en Vercel (HTTPS) funcionará con normalidad.'
-      );
+    if (!isCryptoSupported()) {
+      throw new Error('Web Cryptography no disponible en conexiones HTTP de red local. En Vercel (HTTPS) o localhost funciona con normalidad.');
     }
     msalApp = new PublicClientApplication(config);
   }
@@ -49,11 +46,14 @@ function initialize(): Promise<void> {
     return Promise.reject(new Error('Falta configurar VITE_AZURE_CLIENT_ID o VITE_AZURE_TENANT_ID.'));
   }
 
+  if (!isCryptoSupported()) {
+    return Promise.reject(new Error('MSAL requiere HTTPS o localhost.'));
+  }
+
   let app: PublicClientApplication;
   try {
     app = getMsalInstance();
   } catch (err: any) {
-    console.warn('MSAL no se pudo inicializar en este entorno:', err);
     return Promise.reject(err);
   }
 
@@ -114,6 +114,7 @@ async function graphFetch(path: string, token: string, init: RequestInit = {}): 
 }
 
 export async function getExistingProfile(): Promise<UserProfile | null> {
+  if (!isCryptoSupported()) return null;
   try {
     await initialize();
     const app = getMsalInstance();

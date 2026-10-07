@@ -178,7 +178,7 @@ export function classifyAgeBucket(diasVencimiento: number, rangoCarteraRaw?: str
   return 'MAS_180';
 }
 
-function getGroupLabel(groupNumber: number): string {
+export function getGroupLabel(groupNumber: number): string {
   switch (groupNumber) {
     case 1:
       return 'Grupo Novoa';
@@ -248,6 +248,250 @@ function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
     categoriaEdad,
     diasVencimientoCalc: diasVencimiento,
     estaVencida,
+  };
+}
+
+export interface CarteraMetrics {
+  totalSaldo: number;
+  totalCorriente: number;
+  totalVencido: number;
+  porcentajeVencido: number;
+  totalDocumentos: number;
+  clientesUnicos: number;
+  cupoTotalComprometido: number;
+  agingBreakdown: AgingSummaryItem[];
+  groupsSummary: GroupSummary[];
+  executivesSummary: ExecutiveSummary[];
+  customersSummary: CustomerSummary[];
+}
+
+/**
+ * Calcula métricas, edades, agrupaciones comerciales y deudores para cualquier subconjunto de facturas
+ */
+export function computeCarteraMetrics(records: CarteraRecord[]): CarteraMetrics {
+  let totalSaldo = 0;
+  let totalCorriente = 0;
+  let totalVencido = 0;
+  const uniqueNits = new Set<string>();
+
+  const agingBucketsMap: Record<AgeBucketKey, { totalValor: number; count: number }> = {
+    CORRIENTE: { totalValor: 0, count: 0 },
+    '1_30': { totalValor: 0, count: 0 },
+    '31_60': { totalValor: 0, count: 0 },
+    '61_90': { totalValor: 0, count: 0 },
+    '91_120': { totalValor: 0, count: 0 },
+    '121_180': { totalValor: 0, count: 0 },
+    MAS_180: { totalValor: 0, count: 0 },
+  };
+
+  const groupMap = new Map<number, {
+    grupo: number;
+    totalSaldo: number;
+    totalCorriente: number;
+    totalVencido: number;
+    docCount: number;
+    nits: Set<string>;
+    comerciales: Set<string>;
+    aging: Record<AgeBucketKey, number>;
+  }>();
+
+  // Inicializar grupos 1, 2, 3, 4 y 0
+  [1, 2, 3, 4, 0].forEach((g) => {
+    groupMap.set(g, {
+      grupo: g,
+      totalSaldo: 0,
+      totalCorriente: 0,
+      totalVencido: 0,
+      docCount: 0,
+      nits: new Set<string>(),
+      comerciales: new Set<string>(),
+      aging: {
+        CORRIENTE: 0,
+        '1_30': 0,
+        '31_60': 0,
+        '61_90': 0,
+        '91_120': 0,
+        '121_180': 0,
+        MAS_180: 0,
+      },
+    });
+  });
+
+  const execMap = new Map<string, {
+    nombre: string;
+    email: string;
+    grupo: number;
+    directorNombre: string;
+    totalSaldo: number;
+    totalCorriente: number;
+    totalVencido: number;
+    docCount: number;
+    nits: Set<string>;
+    aging: Record<AgeBucketKey, number>;
+  }>();
+
+  const custMap = new Map<string, CustomerSummary>();
+
+  for (const r of records) {
+    const val = r.Valor_Saldo;
+    totalSaldo += val;
+    uniqueNits.add(r.Identificacion);
+
+    if (r.estaVencida) {
+      totalVencido += val;
+    } else {
+      totalCorriente += val;
+    }
+
+    const ageKey = r.categoriaEdad;
+    agingBucketsMap[ageKey].totalValor += val;
+    agingBucketsMap[ageKey].count += 1;
+
+    // Grupo
+    const grp = groupMap.get(r.grupoNumero) || groupMap.get(0)!;
+    grp.totalSaldo += val;
+    if (r.estaVencida) grp.totalVencido += val;
+    else grp.totalCorriente += val;
+    grp.docCount += 1;
+    grp.nits.add(r.Identificacion);
+    grp.comerciales.add(r.Nombre_Empleado);
+    grp.aging[ageKey] += val;
+    groupMap.set(r.grupoNumero, grp);
+
+    // Ejecutivo
+    const execKey = (r.Nombre_Empleado || 'Sin Asignar').toLowerCase();
+    const exec = execMap.get(execKey) || {
+      nombre: r.Nombre_Empleado,
+      email: r.ejecutivoEmail || '',
+      grupo: r.grupoNumero,
+      directorNombre: r.directorNombre,
+      totalSaldo: 0,
+      totalCorriente: 0,
+      totalVencido: 0,
+      docCount: 0,
+      nits: new Set<string>(),
+      aging: {
+        CORRIENTE: 0,
+        '1_30': 0,
+        '31_60': 0,
+        '61_90': 0,
+        '91_120': 0,
+        '121_180': 0,
+        MAS_180: 0,
+      },
+    };
+    exec.totalSaldo += val;
+    if (r.estaVencida) exec.totalVencido += val;
+    else exec.totalCorriente += val;
+    exec.docCount += 1;
+    exec.nits.add(r.Identificacion);
+    exec.aging[ageKey] += val;
+    execMap.set(execKey, exec);
+
+    // Cliente
+    const custKey = r.Identificacion;
+    const cust = custMap.get(custKey) || {
+      nit: r.Identificacion,
+      dv: r.Dv,
+      empresa: r.Empresa,
+      cupoCredito: r.Cupo_Credito,
+      estadoCliente: r.Estado_Cliente,
+      plazoPago: r.Plazo_PagoCliente,
+      totalSaldo: 0,
+      totalCorriente: 0,
+      totalVencido: 0,
+      docCount: 0,
+      comercial: r.Nombre_Empleado,
+      grupo: r.grupoNumero,
+      directorNombre: r.directorNombre,
+      aging: {
+        CORRIENTE: 0,
+        '1_30': 0,
+        '31_60': 0,
+        '61_90': 0,
+        '91_120': 0,
+        '121_180': 0,
+        MAS_180: 0,
+      },
+    };
+    cust.totalSaldo += val;
+    if (r.estaVencida) cust.totalVencido += val;
+    else cust.totalCorriente += val;
+    cust.docCount += 1;
+    cust.aging[ageKey] += val;
+    custMap.set(custKey, cust);
+  }
+
+  const agingBreakdown: AgingSummaryItem[] = AGING_ORDER.map((key) => {
+    const config = AGING_CONFIG[key];
+    const data = agingBucketsMap[key];
+    const pct = totalSaldo > 0 ? (data.totalValor / totalSaldo) * 100 : 0;
+    return {
+      key,
+      label: config.label,
+      shortLabel: config.shortLabel,
+      totalValor: data.totalValor,
+      count: data.count,
+      percentage: pct,
+      color: config.color,
+      badgeClass: config.badgeClass,
+    };
+  });
+
+  const groupsSummary: GroupSummary[] = Array.from(groupMap.values())
+    .map((g) => {
+      const dir = LISTA_DIRECTORES.find((d) => d.grupo === g.grupo);
+      return {
+        grupo: g.grupo,
+        grupoNombre: getGroupLabel(g.grupo),
+        directorNombre: dir ? dir.nombre : g.grupo === 0 ? 'Gerencia / Especiales' : 'Sin Asignar',
+        directorEmail: dir ? dir.email : '',
+        totalSaldo: g.totalSaldo,
+        totalCorriente: g.totalCorriente,
+        totalVencido: g.totalVencido,
+        porcentajeVencido: g.totalSaldo > 0 ? (g.totalVencido / g.totalSaldo) * 100 : 0,
+        docCount: g.docCount,
+        clientesCount: g.nits.size,
+        ejecutivosCount: g.comerciales.size,
+        aging: g.aging,
+      };
+    })
+    .sort((a, b) => b.totalSaldo - a.totalSaldo);
+
+  const executivesSummary: ExecutiveSummary[] = Array.from(execMap.values())
+    .map((e) => ({
+      nombre: e.nombre,
+      email: e.email,
+      grupo: e.grupo,
+      grupoNombre: getGroupLabel(e.grupo),
+      directorNombre: e.directorNombre,
+      totalSaldo: e.totalSaldo,
+      totalCorriente: e.totalCorriente,
+      totalVencido: e.totalVencido,
+      porcentajeVencido: e.totalSaldo > 0 ? (e.totalVencido / e.totalSaldo) * 100 : 0,
+      docCount: e.docCount,
+      clientesCount: e.nits.size,
+      aging: e.aging,
+    }))
+    .sort((a, b) => b.totalSaldo - a.totalSaldo);
+
+  const customersSummary: CustomerSummary[] = Array.from(custMap.values())
+    .sort((a, b) => b.totalSaldo - a.totalSaldo);
+
+  const cupoTotalComprometido = customersSummary.reduce((sum, c) => sum + c.cupoCredito, 0);
+
+  return {
+    totalSaldo,
+    totalCorriente,
+    totalVencido,
+    porcentajeVencido: totalSaldo > 0 ? (totalVencido / totalSaldo) * 100 : 0,
+    totalDocumentos: records.length,
+    clientesUnicos: uniqueNits.size,
+    cupoTotalComprometido,
+    agingBreakdown,
+    groupsSummary,
+    executivesSummary,
+    customersSummary,
   };
 }
 
@@ -347,260 +591,28 @@ export async function fetchCarteraCompleta(
     };
   });
 
-  // Cálculos de Totales
-  let totalSaldo = 0;
-  let totalCorriente = 0;
-  let totalVencido = 0;
-  const uniqueNits = new Set<string>();
-
-  const agingBucketsMap: Record<AgeBucketKey, { totalValor: number; count: number }> = {
-    CORRIENTE: { totalValor: 0, count: 0 },
-    '1_30': { totalValor: 0, count: 0 },
-    '31_60': { totalValor: 0, count: 0 },
-    '61_90': { totalValor: 0, count: 0 },
-    '91_120': { totalValor: 0, count: 0 },
-    '121_180': { totalValor: 0, count: 0 },
-    MAS_180: { totalValor: 0, count: 0 },
-  };
-
-  const groupMap = new Map<number, {
-    grupo: number;
-    totalSaldo: number;
-    totalCorriente: number;
-    totalVencido: number;
-    docCount: number;
-    nits: Set<string>;
-    comerciales: Set<string>;
-    aging: Record<AgeBucketKey, number>;
-  }>();
-
-  // Inicializar grupos 1, 2, 3, 4 y 0
-  [1, 2, 3, 4, 0].forEach((g) => {
-    groupMap.set(g, {
-      grupo: g,
-      totalSaldo: 0,
-      totalCorriente: 0,
-      totalVencido: 0,
-      docCount: 0,
-      nits: new Set<string>(),
-      comerciales: new Set<string>(),
-      aging: {
-        CORRIENTE: 0,
-        '1_30': 0,
-        '31_60': 0,
-        '61_90': 0,
-        '91_120': 0,
-        '121_180': 0,
-        MAS_180: 0,
-      },
-    });
-  });
-
-  const execMap = new Map<string, {
-    nombre: string;
-    email: string;
-    grupo: number;
-    directorNombre: string;
-    totalSaldo: number;
-    totalCorriente: number;
-    totalVencido: number;
-    docCount: number;
-    nits: Set<string>;
-    aging: Record<AgeBucketKey, number>;
-  }>();
-
-  const custMap = new Map<string, CustomerSummary>();
-
-  for (const r of records) {
-    const val = r.Valor_Saldo;
-    totalSaldo += val;
-    uniqueNits.add(r.Identificacion);
-
-    if (r.estaVencida) {
-      totalVencido += val;
-    } else {
-      totalCorriente += val;
-    }
-
-    // Aging item
-    const ageKey = r.categoriaEdad;
-    agingBucketsMap[ageKey].totalValor += val;
-    agingBucketsMap[ageKey].count += 1;
-
-    // Grupo
-    const grp = groupMap.get(r.grupoNumero) || {
-      grupo: r.grupoNumero,
-      totalSaldo: 0,
-      totalCorriente: 0,
-      totalVencido: 0,
-      docCount: 0,
-      nits: new Set<string>(),
-      comerciales: new Set<string>(),
-      aging: {
-        CORRIENTE: 0,
-        '1_30': 0,
-        '31_60': 0,
-        '61_90': 0,
-        '91_120': 0,
-        '121_180': 0,
-        MAS_180: 0,
-      },
-    };
-    grp.totalSaldo += val;
-    if (r.estaVencida) grp.totalVencido += val;
-    else grp.totalCorriente += val;
-    grp.docCount += 1;
-    grp.nits.add(r.Identificacion);
-    grp.comerciales.add(r.Nombre_Empleado);
-    grp.aging[ageKey] += val;
-    groupMap.set(r.grupoNumero, grp);
-
-    // Ejecutivo
-    const execKey = r.Nombre_Empleado.toLowerCase();
-    const exec = execMap.get(execKey) || {
-      nombre: r.Nombre_Empleado,
-      email: r.ejecutivoEmail || '',
-      grupo: r.grupoNumero,
-      directorNombre: r.directorNombre,
-      totalSaldo: 0,
-      totalCorriente: 0,
-      totalVencido: 0,
-      docCount: 0,
-      nits: new Set<string>(),
-      aging: {
-        CORRIENTE: 0,
-        '1_30': 0,
-        '31_60': 0,
-        '61_90': 0,
-        '91_120': 0,
-        '121_180': 0,
-        MAS_180: 0,
-      },
-    };
-    exec.totalSaldo += val;
-    if (r.estaVencida) exec.totalVencido += val;
-    else exec.totalCorriente += val;
-    exec.docCount += 1;
-    exec.nits.add(r.Identificacion);
-    exec.aging[ageKey] += val;
-    execMap.set(execKey, exec);
-
-    // Cliente
-    const custKey = r.Identificacion;
-    const cust = custMap.get(custKey) || {
-      nit: r.Identificacion,
-      dv: r.Dv,
-      empresa: r.Empresa,
-      cupoCredito: r.Cupo_Credito,
-      estadoCliente: r.Estado_Cliente,
-      plazoPago: r.Plazo_PagoCliente,
-      totalSaldo: 0,
-      totalCorriente: 0,
-      totalVencido: 0,
-      docCount: 0,
-      comercial: r.Nombre_Empleado,
-      grupo: r.grupoNumero,
-      directorNombre: r.directorNombre,
-      aging: {
-        CORRIENTE: 0,
-        '1_30': 0,
-        '31_60': 0,
-        '61_90': 0,
-        '91_120': 0,
-        '121_180': 0,
-        MAS_180: 0,
-      },
-    };
-    cust.totalSaldo += val;
-    if (r.estaVencida) cust.totalVencido += val;
-    else cust.totalCorriente += val;
-    cust.docCount += 1;
-    cust.aging[ageKey] += val;
-    custMap.set(custKey, cust);
-  }
-
-  // Desglose de aging ordenado
-  const agingBreakdown: AgingSummaryItem[] = AGING_ORDER.map((key) => {
-    const config = AGING_CONFIG[key];
-    const data = agingBucketsMap[key];
-    const pct = totalSaldo > 0 ? (data.totalValor / totalSaldo) * 100 : 0;
-    return {
-      key,
-      label: config.label,
-      shortLabel: config.shortLabel,
-      totalValor: data.totalValor,
-      count: data.count,
-      percentage: pct,
-      color: config.color,
-      badgeClass: config.badgeClass,
-    };
-  });
-
-  // Resumen de grupos
-  const groupsSummary: GroupSummary[] = Array.from(groupMap.values())
-    .map((g) => {
-      const dir = LISTA_DIRECTORES.find((d) => d.grupo === g.grupo);
-      return {
-        grupo: g.grupo,
-        grupoNombre: getGroupLabel(g.grupo),
-        directorNombre: dir ? dir.nombre : g.grupo === 0 ? 'Gerencia / Especiales' : 'Sin Asignar',
-        directorEmail: dir ? dir.email : '',
-        totalSaldo: g.totalSaldo,
-        totalCorriente: g.totalCorriente,
-        totalVencido: g.totalVencido,
-        porcentajeVencido: g.totalSaldo > 0 ? (g.totalVencido / g.totalSaldo) * 100 : 0,
-        docCount: g.docCount,
-        clientesCount: g.nits.size,
-        ejecutivosCount: g.comerciales.size,
-        aging: g.aging,
-      };
-    })
-    .sort((a, b) => b.totalSaldo - a.totalSaldo);
-
-  // Resumen de ejecutivos
-  const executivesSummary: ExecutiveSummary[] = Array.from(execMap.values())
-    .map((e) => ({
-      nombre: e.nombre,
-      email: e.email,
-      grupo: e.grupo,
-      grupoNombre: getGroupLabel(e.grupo),
-      directorNombre: e.directorNombre,
-      totalSaldo: e.totalSaldo,
-      totalCorriente: e.totalCorriente,
-      totalVencido: e.totalVencido,
-      porcentajeVencido: e.totalSaldo > 0 ? (e.totalVencido / e.totalSaldo) * 100 : 0,
-      docCount: e.docCount,
-      clientesCount: e.nits.size,
-      aging: e.aging,
-    }))
-    .sort((a, b) => b.totalSaldo - a.totalSaldo);
-
-  // Resumen de clientes (Top deudores)
-  const customersSummary: CustomerSummary[] = Array.from(custMap.values())
-    .sort((a, b) => b.totalSaldo - a.totalSaldo);
-
-  // Recaudos del período
+  // Métricas e indicadores consolidados
+  const metrics = computeCarteraMetrics(records);
   const totalRecaudosPeriodo = recibos.reduce((sum, r) => sum + r.Valor_Pagado, 0);
   const totalNotasPeriodo = notas.reduce((sum, n) => sum + n.Valor_NotaCredito, 0);
-  const cupoTotalComprometido = customersSummary.reduce((sum, c) => sum + c.cupoCredito, 0);
 
   return {
     records,
     recibos,
     notas,
-    totalSaldo,
-    totalCorriente,
-    totalVencido,
-    porcentajeVencido: totalSaldo > 0 ? (totalVencido / totalSaldo) * 100 : 0,
+    totalSaldo: metrics.totalSaldo,
+    totalCorriente: metrics.totalCorriente,
+    totalVencido: metrics.totalVencido,
+    porcentajeVencido: metrics.porcentajeVencido,
     totalRecaudosPeriodo,
     totalNotasPeriodo,
-    clientesUnicos: uniqueNits.size,
-    totalDocumentos: records.length,
-    cupoTotalComprometido,
-    agingBreakdown,
-    groupsSummary,
-    executivesSummary,
-    customersSummary,
+    clientesUnicos: metrics.clientesUnicos,
+    totalDocumentos: metrics.totalDocumentos,
+    cupoTotalComprometido: metrics.cupoTotalComprometido,
+    agingBreakdown: metrics.agingBreakdown,
+    groupsSummary: metrics.groupsSummary,
+    executivesSummary: metrics.executivesSummary,
+    customersSummary: metrics.customersSummary,
     fechaCorte: fechaFinal,
     fechaConsulta: new Date().toISOString(),
   };
