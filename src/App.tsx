@@ -741,6 +741,8 @@ export function App() {
                 recibos={filteredRecibos}
                 fechaBase="2026-10-06"
                 onSelectRecord={setSelectedInvoice}
+                onSync={() => loadData()}
+                isLoading={loading}
               />
             )}
 
