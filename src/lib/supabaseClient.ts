@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Variables de entorno de Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 // Verificar si Supabase está configurado con claves reales
 export const isSupabaseConfigured = Boolean(
