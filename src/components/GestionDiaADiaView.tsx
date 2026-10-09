@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -27,9 +27,11 @@ import {
   X,
   Layers,
   Filter,
+  Info,
+  FileText,
 } from 'lucide-react';
 import ExcelJSRuntime from 'exceljs';
-import type { CarteraRecord, ReciboCajaRecord } from '../types';
+import type { CarteraRecord, ReciboCajaRecord, NotaCreditoRecord } from '../types';
 import {
   formatCompactCurrency,
   formatCurrency,
@@ -61,6 +63,8 @@ interface CohortPoint {
   dailyWithdrawnPending: number;
   dailyWithdrawnCount: number;
   dailyDeltaPct: number;
+  dailyNewPending: number;
+  dailyNewCount: number;
 }
 
 function formatCutoffText(iso: string): string {
@@ -90,16 +94,6 @@ export function GestionDiaADiaView({
   isLoading = false,
   onNavigateToEvolucion,
 }: Props) {
-  // Estado de controles de Desmonte y Gráfica
-  const [selectedCutoff, setSelectedCutoff] = useState<string>(fechaBase);
-  const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
-  const [isExportingExcel, setIsExportingExcel] = useState(false);
-
-  // Estado del Monitor Operativo En Vivo (¿Qué Salió y Qué Entró?)
-  const [activeTab, setActiveTab] = useState<'salientes' | 'entrantes' | 'vivas'>('salientes');
-  const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
-  const [searchTerm, setSearchTerm] = useState('');
-
   // ─── 1. CÁLCULO DE LA LÍNEA BASE INICIAL Y DESMONTE CORTE A CORTE ─────────
   // Todas las facturas cuya emisión fue <= fechaBase formaban la cartera al arrancar la gestión
   const initialBaseRecords = useMemo(() => {
@@ -125,10 +119,20 @@ export function GestionDiaADiaView({
     });
   }, [records, fechaBase]);
 
-  // Fechas únicas de corte desde la base (ej. 2026-10-06, 2026-10-07)
+  // Fecha de Hoy dinámica
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  // Fechas únicas de corte desde la base (ej. 2026-10-06, 2026-10-07, 2026-10-08...)
   const cohortDates = useMemo(() => {
     const datesSet = new Set<string>();
     datesSet.add(fechaBase);
+    datesSet.add(todayStr); // Hoy siempre presente en el seguimiento activo
 
     // Agregar fechas de recaudos
     recibosDesdeBase.forEach((rc) => {
@@ -143,7 +147,28 @@ export function GestionDiaADiaView({
     });
 
     return Array.from(datesSet).sort();
-  }, [fechaBase, recibosDesdeBase, facturasNuevas]);
+  }, [fechaBase, todayStr, recibosDesdeBase, facturasNuevas]);
+
+  // Corte más reciente (ej. hoy)
+  const latestCutoffDate = cohortDates.length ? cohortDates[cohortDates.length - 1] : todayStr;
+
+  // Estado de controles de Desmonte y Gráfica (inicia en el corte de Hoy)
+  const [selectedCutoff, setSelectedCutoff] = useState<string>(latestCutoffDate);
+  const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+  // Mantener actualizado al corte más reciente si cohortDates cambia
+  useEffect(() => {
+    if (latestCutoffDate && selectedCutoff === fechaBase && latestCutoffDate !== fechaBase) {
+      setSelectedCutoff(latestCutoffDate);
+    }
+  }, [latestCutoffDate, selectedCutoff, fechaBase]);
+
+  // Estado del Monitor Operativo En Vivo (¿Qué Salió y Qué Entró?)
+  // Por defecto 'entrantes' para que inmediatamente se vea lo nuevo generado hoy
+  const [activeTab, setActiveTab] = useState<'entrantes' | 'salientes' | 'vivas'>('entrantes');
+  const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Construcción de la Serie Cronológica de Desmonte (Idéntico a Remisiones)
   const cohortSeries: CohortPoint[] = useMemo(() => {
@@ -169,8 +194,17 @@ export function GestionDiaADiaView({
         return f === cutoff;
       });
 
+      // Nuevas facturas de este día
+      const dayNuevas = facturasNuevas.filter((r) => {
+        const f = r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '';
+        return f === cutoff;
+      });
+
       const dailyWithdrawnPending = dayRecibos.reduce((sum, rc) => sum + rc.Valor_Pagado, 0);
       const dailyWithdrawnCount = dayRecibos.length;
+
+      const dailyNewPending = dayNuevas.reduce((sum, r) => sum + r.Valor_Saldo, 0);
+      const dailyNewCount = dayNuevas.length;
 
       accumulatedWithdrawn += dailyWithdrawnPending;
       accumulatedWithdrawnCount += dailyWithdrawnCount;
@@ -197,11 +231,13 @@ export function GestionDiaADiaView({
         dailyWithdrawnPending,
         dailyWithdrawnCount,
         dailyDeltaPct,
+        dailyNewPending,
+        dailyNewCount,
       };
     });
-  }, [cohortDates, initialBaseRecords, recibosDesdeBase]);
+  }, [cohortDates, initialBaseRecords, recibosDesdeBase, facturasNuevas]);
 
-  const initialPoint = cohortSeries[0] || {
+  const initialPoint: CohortPoint = cohortSeries[0] || {
     cutoff: fechaBase,
     initialPending: 0,
     initialCount: 0,
@@ -214,15 +250,40 @@ export function GestionDiaADiaView({
     dailyWithdrawnPending: 0,
     dailyWithdrawnCount: 0,
     dailyDeltaPct: 0,
+    dailyNewPending: 0,
+    dailyNewCount: 0,
+    dailyNotasPending: 0,
+    dailyNotasCount: 0,
   };
 
   const latestPoint = cohortSeries[cohortSeries.length - 1] || initialPoint;
 
+  const selectedPoint = useMemo(() => {
+    return cohortSeries.find((pt) => pt.cutoff === selectedCutoff) || latestPoint;
+  }, [cohortSeries, selectedCutoff, latestPoint]);
+
   // ─── 2. MONITOR OPERATIVO EN VIVO: ¿QUÉ SALIÓ Y QUÉ ENTRÓ? ────────────────
-  // Salientes: Recibos de caja que mataron/pagaron facturas
-  const salientesList = recibosDesdeBase;
-  // Entrantes: Nuevas facturas emitidas desde la fecha base
-  const entrantesList = facturasNuevas;
+  // Modo de filtro: 'dia' (solo el día seleccionado) o 'acumulado' (todo desde la base)
+  const [filterMode, setFilterMode] = useState<'dia' | 'acumulado'>('dia');
+
+  // Salientes: Recibos de caja según filterMode y corte seleccionado
+  const salientesList = useMemo(() => {
+    if (filterMode === 'acumulado') return recibosDesdeBase;
+    return recibosDesdeBase.filter((rc) => {
+      const f = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
+      return f === selectedCutoff;
+    });
+  }, [recibosDesdeBase, filterMode, selectedCutoff]);
+
+  // Entrantes: Nuevas facturas emitidas según filterMode y corte seleccionado
+  const entrantesList = useMemo(() => {
+    if (filterMode === 'acumulado') return facturasNuevas;
+    return facturasNuevas.filter((r) => {
+      const f = r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '';
+      return f === selectedCutoff;
+    });
+  }, [facturasNuevas, filterMode, selectedCutoff]);
+
   // Vivas: Todas las facturas actualmente pendientes en cartera
   const vivasList = records;
 
@@ -295,9 +356,9 @@ export function GestionDiaADiaView({
 
       const sheetName =
         activeTab === 'salientes'
-          ? 'Lo que Salió (Matadas)'
+          ? 'Facturas Recaudadas'
           : activeTab === 'entrantes'
-          ? 'Lo que Entró (Nuevas)'
+          ? 'Nuevas Facturas'
           : 'Total en Cartera';
 
       const headerColor =
@@ -334,7 +395,7 @@ export function GestionDiaADiaView({
             director: rc.directorNombre,
             vrFactura: rc.Valor_Factura,
             vrPagado: rc.Valor_Pagado,
-            estado: isKilled ? '100% MATADA' : 'ABONO PARCIAL',
+            estado: isKilled ? '100% RECAUDADA' : 'ABONO PARCIAL',
             fechaEmision: rc.Fecha_Emision?.split('T')[0] || '',
             fechaRecaudo: rc.Fecha_Recaudo?.split('T')[0] || '',
             diasPago: rc.Dias_Pago,
@@ -404,7 +465,7 @@ export function GestionDiaADiaView({
 
   return (
     <div className="gestion-view-container" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* ─── BANNER SUPERIOR INFORMATIVO DEL PROCESO OPERATIVO (DESDE 07/10) ─── */}
+      {/* ─── BANNER SUPERIOR INFORMATIVO DEL PROCESO OPERATIVO (DÍA A DÍA) ─── */}
       <div
         style={{
           display: 'flex',
@@ -441,11 +502,11 @@ export function GestionDiaADiaView({
                 Proceso Diario Activo
               </span>
               <strong style={{ fontSize: 16, color: '#166534' }}>
-                Gestión Operativa del Proceso (Desde el 07 de Octubre de 2026)
+                Gestión Operativa del Proceso (Seguimiento Día a Día)
               </strong>
             </div>
             <p style={{ margin: '3px 0 0', fontSize: 13, color: '#15803D' }}>
-              Base inicial de partida al 06/10: <strong>{formatNumber(initialBaseRecords.length)} facturas</strong> ({formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}). Movimientos del día a día: facturas matadas por Recibos de Caja y nuevas emisiones.
+              Base inicial de partida al 06/10: <strong>{formatNumber(initialBaseRecords.length)} facturas</strong> ({formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}). Movimientos del día a día: facturas recaudadas por Recibos de Caja y nuevas emisiones.
             </p>
           </div>
         </div>
@@ -481,7 +542,7 @@ export function GestionDiaADiaView({
               Seguimiento Cronológico del Desmonte ({formatCutoffText(fechaBase)})
             </h3>
             <small style={{ color: '#6e6e73', fontSize: 12 }}>
-              Evolución corte a corte de las facturas entregadas inicialmente: saldo restante y facturas matadas por recibos de caja.
+              Evolución corte a corte de las facturas entregadas inicialmente: saldo restante y facturas recaudadas por recibos de caja.
             </small>
           </div>
 
@@ -496,13 +557,13 @@ export function GestionDiaADiaView({
               className="btn-download-excel"
               onClick={handleExportExcel}
               disabled={isExportingExcel || latestPoint.withdrawnCount === 0}
-              title="Descargar Excel con detalle de facturas matadas y recaudos"
+              title="Descargar Excel con detalle de facturas recaudadas"
             >
               <Download size={14} />
               <span>
                 {isExportingExcel
                   ? 'Generando...'
-                  : `Descargar Excel de Salidas (${formatNumber(latestPoint.withdrawnCount)})`}
+                  : `Descargar Excel de Recaudos (${formatNumber(latestPoint.withdrawnCount)})`}
               </span>
             </button>
           </div>
@@ -524,11 +585,11 @@ export function GestionDiaADiaView({
             </span>
           </div>
 
-          {/* Tarjeta 2: Total Facturas Matadas */}
+          {/* Tarjeta 2: Total Facturas Recaudadas */}
           <div className="timeline-summary-card tone-green">
             <div className="timeline-summary-top">
-              <span className="timeline-summary-label">Total Facturas Matadas</span>
-              <span className="cohort-kpi-badge green">Cerradas</span>
+              <span className="timeline-summary-label">Total Facturas Recaudadas</span>
+              <span className="cohort-kpi-badge green">Saldadas</span>
             </div>
             <strong className="timeline-summary-value text-green">
               ▼ -{formatNumber(latestPoint.withdrawnCount)} facturas
@@ -541,7 +602,7 @@ export function GestionDiaADiaView({
                     : 0
                 )}
               </strong>{' '}
-              de las facturas iniciales saldadas
+              de las facturas iniciales saldadas por recaudo
             </span>
           </div>
 
@@ -649,7 +710,7 @@ export function GestionDiaADiaView({
                         Recaudado total: -{formatCurrency(pt.withdrawnPending)} ({formatPercent(pt.recoveryPct * 100)})
                       </div>
                       <div style={{ fontSize: 11, color: '#15803d' }}>
-                        Facturas matadas: -{formatNumber(pt.withdrawnCount)}
+                        Facturas recaudadas: -{formatNumber(pt.withdrawnCount)}
                       </div>
                     </div>
                   );
@@ -746,7 +807,7 @@ export function GestionDiaADiaView({
                 </div>
 
                 <div className="mgmt-day-card-flow out">
-                  <small className="mgmt-day-card-sublabel">⬇ Salieron este día (Recaudos)</small>
+                  <small className="mgmt-day-card-sublabel">⬇ Salieron (Recaudos)</small>
                   {isInitial ? (
                     <span className="text-muted" style={{ fontSize: '11px' }}>Base de partida</span>
                   ) : dailyCount > 0 ? (
@@ -757,9 +818,27 @@ export function GestionDiaADiaView({
                       </small>
                     </>
                   ) : (
-                    <span className="text-muted" style={{ fontSize: '11px' }}>0 facturas salieron</span>
+                    <span className="text-muted" style={{ fontSize: '11px' }}>
+                      {pt.cutoff === todayStr ? 'Recaudos en proceso de asentar' : '0 salidas'}
+                    </span>
                   )}
                 </div>
+
+                {!isInitial && (
+                  <div className="mgmt-day-card-flow in" style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #E2E8F0' }}>
+                    <small className="mgmt-day-card-sublabel">⬆ Entraron (Nuevas Facturas)</small>
+                    {(pt.dailyNewCount || 0) > 0 ? (
+                      <>
+                        <strong style={{ color: '#2563EB', fontSize: '12px' }}>+{formatNumber(pt.dailyNewCount || 0)} facturas</strong>
+                        <small style={{ color: '#1D4ED8', fontSize: '10px', fontWeight: 650 }}>
+                          +{formatCurrency(pt.dailyNewPending || 0)}
+                        </small>
+                      </>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: '11px' }}>Sin emisiones</span>
+                    )}
+                  </div>
+                )}
 
                 <div
                   className={`mgmt-day-card-balance tone-${
@@ -866,13 +945,56 @@ export function GestionDiaADiaView({
             </button>
           )}
         </div>
+        {/* Banner Informativo de Situación Operativa del Corte Seleccionado */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 14,
+            alignItems: 'flex-start',
+            padding: '16px 20px',
+            backgroundColor: '#F8FAFC',
+            borderRadius: 14,
+            border: '1.5px solid #CBD5E1',
+            marginBottom: 20,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: '#EFF6FF',
+              color: '#2563EB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          >
+            <Info size={20} />
+          </div>
+          <div style={{ flex: 1, fontSize: 13, lineHeight: '1.55', color: '#334155' }}>
+            <strong style={{ color: '#0F172A', fontSize: 14, display: 'block', marginBottom: 4 }}>
+              Estado Operativo en Tiempo Real · {selectedCutoff === todayStr ? 'Jornada de Hoy' : 'Corte Seleccionado'} ({formatCutoffText(selectedCutoff)})
+            </strong>
+            <div>
+              • <strong>🔵 Nuevas Facturas Emitidas:</strong> En la fecha {formatCutoffText(selectedCutoff)} se registran <strong>{entrantesList.length} nuevas facturas</strong> por un valor de <strong>{formatCurrency(totalEntrantesValor)}</strong> en el ERP.<br />
+              • <strong>🟢 Recibos de Caja:</strong> Se registran <strong>{salientesList.length} facturas recaudadas</strong> por <strong>{formatCurrency(totalSalientesValor)}</strong>.
+              {selectedCutoff === todayStr && salientesList.length === 0 && (
+                <span> (Los recibos emitidos hoy en caja/tesorería permanecen en lote preliminar en Siesa y se reflejarán al momento del cierre diario).</span>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* 2.2 Tarjetas Operativas Directas (Base Recibida, Lo que Salió, Lo que Entró, Total en Cartera) */}
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 16,
+            gap: 14,
             marginBottom: 20,
           }}
         >
@@ -908,7 +1030,7 @@ export function GestionDiaADiaView({
                 <Layers size={20} />
               </div>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#6B21A8', marginBottom: 4 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#6B21A8', marginBottom: 4 }}>
               {formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}
             </div>
             <div style={{ fontSize: 13, fontWeight: 750, color: '#7E22CE' }}>
@@ -919,7 +1041,7 @@ export function GestionDiaADiaView({
             </div>
           </div>
 
-          {/* Tarjeta 1: LO QUE SALIÓ (FACTURAS MATADAS POR RECIBOS DE CAJA) */}
+          {/* Tarjeta 1: LO QUE SALIÓ (FACTURAS RECAUDADAS POR RECIBOS DE CAJA) */}
           <div
             onClick={() => setActiveTab('salientes')}
             style={{
@@ -934,7 +1056,7 @@ export function GestionDiaADiaView({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#15803D', textTransform: 'uppercase' }}>
-                🟢 Lo que Salió (Matadas con Recibo)
+                🟢 Facturas Recaudadas
               </span>
               <div
                 style={{
@@ -951,14 +1073,14 @@ export function GestionDiaADiaView({
                 <ArrowUpRight size={20} />
               </div>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#166534', marginBottom: 4 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#166534', marginBottom: 4 }}>
               {formatCurrency(totalSalientesValor)}
             </div>
             <div style={{ fontSize: 13, fontWeight: 750, color: '#15803D' }}>
               {salientesList.length} facturas saldadas
             </div>
             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Ya no están pendientes (fueron matadas/pagadas con Recibo de Caja)
+              Fueron recaudadas/saldadas con Recibo de Caja
             </div>
           </div>
 
@@ -977,7 +1099,7 @@ export function GestionDiaADiaView({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#1D4ED8', textTransform: 'uppercase' }}>
-                🔵 Lo que Entró (Nuevas)
+                🔵 Nuevas Facturas
               </span>
               <div
                 style={{
@@ -994,14 +1116,14 @@ export function GestionDiaADiaView({
                 <ArrowDownLeft size={20} />
               </div>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#1E40AF', marginBottom: 4 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#1E40AF', marginBottom: 4 }}>
               {formatCurrency(totalEntrantesValor)}
             </div>
             <div style={{ fontSize: 13, fontWeight: 750, color: '#1D4ED8' }}>
               {entrantesList.length} facturas nuevas
             </div>
             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Nuevas ventas emitidas después de la fecha base
+              Nuevas ventas emitidas en el ERP
             </div>
           </div>
 
@@ -1020,7 +1142,7 @@ export function GestionDiaADiaView({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
-                📋 Todas las Activas en Cartera
+                📋 Total en Cartera
               </span>
               <div
                 style={{
@@ -1037,14 +1159,14 @@ export function GestionDiaADiaView({
                 <Package size={20} />
               </div>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
               {formatCurrency(totalVivasValor)}
             </div>
             <div style={{ fontSize: 13, fontWeight: 750, color: '#475569' }}>
               {vivasList.length} facturas pendientes hoy
             </div>
             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Total de cartera viva en este segundo en el ERP
+              Total cartera viva en el ERP en este instante
             </div>
           </div>
         </div>
@@ -1064,61 +1186,109 @@ export function GestionDiaADiaView({
             border: '1px solid #E2E8F0',
           }}
         >
-          {/* Selector de Pestañas */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setActiveTab('salientes')}
+          {/* Selector de Pestañas y Modo de Alcance */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Toggle Día vs Acumulado */}
+            <div
               style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 700,
+                display: 'inline-flex',
+                backgroundColor: '#F1F5F9',
                 borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'salientes' ? '#16A34A' : '#F1F5F9',
-                color: activeTab === 'salientes' ? '#FFFFFF' : '#475569',
-                transition: 'all 0.15s ease',
+                padding: 3,
+                border: '1px solid #E2E8F0',
               }}
             >
-              🟢 Lo que Salió ({salientesList.length})
-            </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('dia')}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: filterMode === 'dia' ? '#FFFFFF' : 'transparent',
+                  color: filterMode === 'dia' ? '#0F172A' : '#64748B',
+                  boxShadow: filterMode === 'dia' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                🗓️ Solo {formatCutoffText(selectedCutoff)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('acumulado')}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: filterMode === 'acumulado' ? '#FFFFFF' : 'transparent',
+                  color: filterMode === 'acumulado' ? '#0F172A' : '#64748B',
+                  boxShadow: filterMode === 'acumulado' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                📊 Acumulado Proceso ({facturasNuevas.length})
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('entrantes')}
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'entrantes' ? '#2563EB' : '#F1F5F9',
-                color: activeTab === 'entrantes' ? '#FFFFFF' : '#475569',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              🔵 Lo que Entró ({entrantesList.length})
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('salientes')}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: activeTab === 'salientes' ? '#16A34A' : '#F1F5F9',
+                  color: activeTab === 'salientes' ? '#FFFFFF' : '#475569',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                🟢 Facturas Recaudadas ({salientesList.length})
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('vivas')}
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                borderRadius: 8,
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: activeTab === 'vivas' ? '#0F172A' : '#F1F5F9',
-                color: activeTab === 'vivas' ? '#FFFFFF' : '#475569',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              📋 Total en Cartera ({vivasList.length})
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('entrantes')}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: activeTab === 'entrantes' ? '#2563EB' : '#F1F5F9',
+                  color: activeTab === 'entrantes' ? '#FFFFFF' : '#475569',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                🔵 Nuevas Facturas ({entrantesList.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('vivas')}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: activeTab === 'vivas' ? '#0F172A' : '#F1F5F9',
+                  color: activeTab === 'vivas' ? '#FFFFFF' : '#475569',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                📋 Total en Cartera ({vivasList.length})
+              </button>
+            </div>
           </div>
 
           {/* Filtros: Director Comercial + Buscador + Excel */}
@@ -1231,9 +1401,9 @@ export function GestionDiaADiaView({
           >
             <span style={{ fontSize: 13, color: '#1E293B', fontWeight: 700 }}>
               {activeTab === 'salientes'
-                ? `🟢 Listado de lo que Salió (Matadas / Cobradas): ${currentList.length} facturas`
+                ? `🟢 Facturas Recaudadas (${filterMode === 'dia' ? formatCutoffText(selectedCutoff) : 'Acumulado'}): ${currentList.length} facturas`
                 : activeTab === 'entrantes'
-                ? `🔵 Listado de lo que Entró (Nuevas Facturas Emitidas): ${currentList.length} facturas`
+                ? `🔵 Nuevas Facturas Emitidas (${filterMode === 'dia' ? formatCutoffText(selectedCutoff) : 'Acumulado'}): ${currentList.length} facturas`
                 : `📋 Total de Facturas Activas en Cartera: ${currentList.length} facturas`}
             </span>
             <span style={{ fontSize: 13, color: '#64748B' }}>
@@ -1258,8 +1428,8 @@ export function GestionDiaADiaView({
             </span>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
               <thead>
                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                   <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>#</th>
@@ -1348,7 +1518,7 @@ export function GestionDiaADiaView({
                               className={`badge ${isKilled ? 'badge-success' : 'badge-warning'}`}
                               style={{ fontSize: 10.5, fontWeight: 750, padding: '3px 8px' }}
                             >
-                              {isKilled ? '100% MATADA' : 'ABONO PARCIAL'}
+                              {isKilled ? '100% RECAUDADA' : 'ABONO PARCIAL'}
                             </span>
                           </td>
                           <td style={{ padding: '10px 16px', color: '#64748B', fontSize: 12 }}>
@@ -1400,7 +1570,7 @@ export function GestionDiaADiaView({
                                 ? 'badge-success'
                                 : 'badge-warning'
                             }`}
-                            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 8px' }}
+                            style={{ fontSize: 10.5, fontWeight: 750, padding: '3px 8px' }}
                           >
                             {r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
                           </span>

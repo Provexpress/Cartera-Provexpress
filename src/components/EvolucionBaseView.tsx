@@ -272,7 +272,7 @@ export function EvolucionBaseView({
           comercial: r.Nombre_Empleado,
           director: r.directorNombre,
           saldo: r.Valor_Saldo,
-          estado: isKilled ? '100% MATADA' : 'PENDIENTE',
+          estado: isKilled ? '100% RECAUDADA' : 'PENDIENTE',
           edad: r.categoriaEdad,
           dias: r.Dias_Vencimiento,
           fechaEmision: r.Fecha_Emision?.split('T')[0] || '',
@@ -365,10 +365,10 @@ export function EvolucionBaseView({
               borderColor: '#15803D',
               boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)',
             }}
-            title="Ver el proceso operativo diario desde el 07 de octubre"
+            title="Ver el proceso operativo diario día a día"
           >
             <CalendarRange size={14} />
-            <span>Ver Gestión del Proceso (Desde 07/10) →</span>
+            <span>Ver Gestión del Proceso (Día a Día) →</span>
           </button>
         )}
       </div>
@@ -385,7 +385,7 @@ export function EvolucionBaseView({
               Seguimiento Cronológico del Desmonte ({formatCutoffText(fechaBase)})
             </h3>
             <small style={{ color: '#6e6e73', fontSize: 12 }}>
-              Evolución corte a corte de las facturas recibidas: saldo restante y facturas matadas por recibos de caja.
+              Evolución corte a corte de las facturas recibidas: saldo restante y facturas recaudadas por recibos de caja.
             </small>
           </div>
 
@@ -424,10 +424,10 @@ export function EvolucionBaseView({
             </span>
           </div>
 
-          {/* Tarjeta 2: Total Facturas Matadas */}
+          {/* Tarjeta 2: Total Facturas Recaudadas */}
           <div className="timeline-summary-card tone-green">
             <div className="timeline-summary-top">
-              <span className="timeline-summary-label">Total Facturas Matadas</span>
+              <span className="timeline-summary-label">Total Facturas Recaudadas</span>
               <span className="cohort-kpi-badge green">Cerradas</span>
             </div>
             <strong className="timeline-summary-value text-green">
@@ -549,7 +549,7 @@ export function EvolucionBaseView({
                         Recaudado total: -{formatCurrency(pt.withdrawnPending)} ({formatPercent(pt.recoveryPct * 100)})
                       </div>
                       <div style={{ fontSize: 11, color: '#15803d' }}>
-                        Facturas matadas: -{formatNumber(pt.withdrawnCount)}
+                        Facturas recaudadas: -{formatNumber(pt.withdrawnCount)}
                       </div>
                     </div>
                   );
@@ -747,7 +747,7 @@ export function EvolucionBaseView({
                   boxShadow: statusFilter === 'killed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🟢 Matadas con Recibo
+                🟢 Recaudadas con Recibo
               </button>
               <button
                 type="button"
@@ -822,8 +822,8 @@ export function EvolucionBaseView({
         </div>
 
         {/* Tabla */}
-        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: '1px solid #E2E8F0', borderRadius: 12 }}>
+          <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                 <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>#</th>
@@ -881,7 +881,7 @@ export function EvolucionBaseView({
                           className={`badge ${isKilled ? 'badge-success' : r.estaVencida ? 'badge-danger' : 'badge-warning'}`}
                           style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}
                         >
-                          {isKilled ? '100% MATADA' : r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
+                          {isKilled ? '100% RECAUDADA' : r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
                         </span>
                       </td>
                       <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>

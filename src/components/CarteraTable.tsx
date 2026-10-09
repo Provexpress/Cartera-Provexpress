@@ -59,10 +59,11 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
   }, [filtered]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const paginated = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    const start = (safeCurrentPage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, currentPage, pageSize]);
+  }, [filtered, safeCurrentPage, pageSize]);
 
   return (
     <div className="table-card">
@@ -231,8 +232,8 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
       <div className="table-pagination-bar">
         <div className="pagination-info">
           <span>
-            Mostrando {filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} a{' '}
-            {Math.min(currentPage * pageSize, filtered.length)} de {formatNumber(filtered.length)} facturas
+            Mostrando {filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1} a{' '}
+            {Math.min(safeCurrentPage * pageSize, filtered.length)} de {formatNumber(filtered.length)} facturas
           </span>
           <select
             className="page-size-select"
@@ -252,19 +253,19 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
           <button
             type="button"
             className="pagination-btn"
-            disabled={currentPage <= 1}
+            disabled={safeCurrentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
           >
             <ChevronLeft size={16} />
             <span>Anterior</span>
           </button>
           <span className="current-page-badge">
-            Página {currentPage} de {totalPages}
+            Página {safeCurrentPage} de {totalPages}
           </span>
           <button
             type="button"
             className="pagination-btn"
-            disabled={currentPage >= totalPages}
+            disabled={safeCurrentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
           >
             <span>Siguiente</span>

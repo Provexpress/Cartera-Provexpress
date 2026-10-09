@@ -60,7 +60,7 @@ import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { EmailNotificationModal } from './components/EmailNotificationModal';
 
 type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
-type DatePreset = 'today' | 'current_month' | 'last_month' | 'custom';
+type DatePreset = 'all' | 'today' | 'current_month' | 'last_month' | 'custom';
 
 const AGING_ORDER: AgeBucketKey[] = [
   'CORRIENTE',
@@ -125,7 +125,8 @@ export function App() {
   const defaults = useMemo(() => getDefaultDateRange(), []);
   const [fechaInicial, setFechaInicial] = useState<string>(defaults.fechaInicial);
   const [fechaFinal, setFechaFinal] = useState<string>(defaults.fechaFinal);
-  const [datePreset, setDatePreset] = useState<DatePreset>('current_month');
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [dateCriterion, setDateCriterion] = useState<'vencimiento' | 'emision'>('vencimiento');
 
   // Datos del backend
   const [carteraData, setCarteraData] = useState<CarteraDataState | null>(null);
@@ -134,7 +135,7 @@ export function App() {
   const [view, setView] = useState<ViewMode>('dashboard');
 
   // Filtros interactivos
-  const [selectedAging, setSelectedAging] = useState<AgeBucketKey | 'all'>('all');
+  const [selectedAging, setSelectedAging] = useState<AgeBucketKey | 'CRITICO_30' | 'all'>('all');
   const [selectedGrupo, setSelectedGrupo] = useState<number | 'all'>('all');
   const [selectedDirector, setSelectedDirector] = useState<string | 'all'>('all');
   const [selectedExecutive, setSelectedExecutive] = useState<string | 'all'>('all');
@@ -156,14 +157,32 @@ export function App() {
       .catch((err) => console.log('Sin sesión previa M365:', err));
   }, []);
 
-  // Función principal de carga de datos
+  // Función principal de carga de datos desde ERP
   const loadData = async (isBackgroundRefresh = false) => {
-    if (!isBackgroundRefresh) setLoading(true);
+    if (!isBackgroundRefresh && !carteraData) setLoading(true);
     else setRefreshing(true);
     setError(null);
 
     try {
-      const data = await fetchCarteraCompleta(fechaInicial, fechaFinal);
+      // Determinamos el rango de consulta inicial para el ERP.
+      // Consultamos desde el 01 de septiembre de 2026 hasta hoy para tener en memoria
+      // tanto el mes anterior completo como el mes actual y todos los recaudos/notas.
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+
+      let queryInit = '2026-09-01';
+      let queryEnd = todayStr;
+
+      // Si el usuario especificó un rango custom específico en los inputs, lo consultamos al refrescar
+      if (datePreset === 'custom' && fechaInicial && fechaFinal) {
+        queryInit = fechaInicial;
+        queryEnd = fechaFinal;
+      }
+
+      const data = await fetchCarteraCompleta(queryInit, queryEnd);
       setCarteraData(data);
     } catch (err: any) {
       console.error('Error al cargar datos de cartera:', err);
@@ -174,9 +193,10 @@ export function App() {
     }
   };
 
+  // Carga inicial una única vez al montar el componente (¡NO recarga al cambiar filtros!)
   useEffect(() => {
     void loadData();
-  }, [fechaInicial, fechaFinal]);
+  }, []);
 
   // Manejo de cambio de Presets de Fecha
   const handleSelectPreset = (preset: DatePreset) => {
@@ -185,14 +205,17 @@ export function App() {
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
 
-    if (preset === 'today') {
-      const todayStr = `${y}-${m}-${d}`;
+    if (preset === 'all') {
+      setFechaInicial('2023-01-01');
+      setFechaFinal(todayStr);
+    } else if (preset === 'today') {
       setFechaInicial(todayStr);
       setFechaFinal(todayStr);
     } else if (preset === 'current_month') {
       setFechaInicial(`${y}-${m}-01`);
-      setFechaFinal(`${y}-${m}-${d}`);
+      setFechaFinal(todayStr);
     } else if (preset === 'last_month') {
       const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -204,12 +227,32 @@ export function App() {
     }
   };
 
-  // ─── CÁLCULO DINÁMICO Y REACTIVO DE MÉTRICAS FILTRADAS ─────────────────────
-  // Se filtran los datos según Grupo, Director, Ejecutivo, Estado y Solo Vencidas
+  // ─── CÁLCULO DINÁMICO Y REACTIVO DE MÉTRICAS FILTRADAS (EN MEMORIA 0ms) ─────
+  // Se filtran los datos según Fecha (Vencimiento/Emisión), Grupo, Director, Ejecutivo, Estado, Solo Vencidas y Antigüedad
   const filteredMetrics = useMemo(() => {
     if (!carteraData) return null;
 
     let baseList = carteraData.records;
+
+    // 1. Filtrado por Fecha si no es 'all' (Toda la cartera activa viva)
+    if (datePreset !== 'all') {
+      if (fechaInicial) {
+        baseList = baseList.filter((r) => {
+          const dt = dateCriterion === 'vencimiento'
+            ? (r.Fecha_Vencimiento ? r.Fecha_Vencimiento.split('T')[0] : '')
+            : (r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '');
+          return dt >= fechaInicial;
+        });
+      }
+      if (fechaFinal) {
+        baseList = baseList.filter((r) => {
+          const dt = dateCriterion === 'vencimiento'
+            ? (r.Fecha_Vencimiento ? r.Fecha_Vencimiento.split('T')[0] : '')
+            : (r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '');
+          return dt <= fechaFinal;
+        });
+      }
+    }
 
     if (selectedGrupo !== 'all') {
       baseList = baseList.filter((r) => r.grupoNumero === selectedGrupo);
@@ -233,20 +276,37 @@ export function App() {
       baseList = baseList.filter((r) => r.estaVencida);
     }
 
-    const metrics = computeCarteraMetrics(baseList);
+    // Métricas base para la selección comercial (conserva las 7 edades en AgingCards)
+    const baseMetrics = computeCarteraMetrics(baseList);
+
+    // activeList: filtrado adicional por la edad de vencimiento seleccionada (filtrado cruzado en vivo)
+    let activeList = baseList;
+    if (selectedAging === 'CRITICO_30') {
+      activeList = baseList.filter((r) => r.diasVencimientoCalc > 30);
+    } else if (selectedAging !== 'all') {
+      activeList = baseList.filter((r) => r.categoriaEdad === selectedAging);
+    }
+
+    // activeMetrics: desglose de comerciales y directores para el rango activo
+    const activeMetrics = selectedAging === 'all'
+      ? baseMetrics
+      : computeCarteraMetrics(activeList);
 
     return {
       baseList,
-      totalSaldo: metrics.totalSaldo,
-      totalCorriente: metrics.totalCorriente,
-      totalVencido: metrics.totalVencido,
-      porcentajeVencido: metrics.porcentajeVencido,
-      totalDocumentos: metrics.totalDocumentos,
-      clientesUnicos: metrics.clientesUnicos,
-      agingItems: metrics.agingBreakdown,
-      groups: metrics.groupsSummary,
-      executives: metrics.executivesSummary,
-      customers: metrics.customersSummary,
+      activeList,
+      baseMetrics,
+      activeMetrics,
+      totalSaldo: baseMetrics.totalSaldo,
+      totalCorriente: baseMetrics.totalCorriente,
+      totalVencido: baseMetrics.totalVencido,
+      porcentajeVencido: baseMetrics.porcentajeVencido,
+      totalDocumentos: baseMetrics.totalDocumentos,
+      clientesUnicos: baseMetrics.clientesUnicos,
+      agingItems: baseMetrics.agingBreakdown,
+      groups: activeMetrics.groupsSummary,
+      executives: activeMetrics.executivesSummary,
+      customers: activeMetrics.customersSummary,
     };
   }, [
     carteraData,
@@ -255,17 +315,103 @@ export function App() {
     selectedExecutive,
     selectedEstado,
     onlyOverdue,
+    selectedAging,
+    datePreset,
+    fechaInicial,
+    fechaFinal,
+    dateCriterion,
   ]);
 
-  // Lista de facturas filtradas incluyendo la tarjeta de edad seleccionada
+  // Lista de facturas filtradas activas (sincronizada en tiempo real)
   const filteredRecords = useMemo(() => {
     if (!filteredMetrics) return [];
-    if (selectedAging === 'all') return filteredMetrics.baseList;
-    return filteredMetrics.baseList.filter((r) => r.categoriaEdad === selectedAging);
-  }, [filteredMetrics, selectedAging]);
+    return filteredMetrics.activeList;
+  }, [filteredMetrics]);
 
-  // Recibos de caja filtrados reactivamente según grupo comercial y director
+  // Recibos de caja filtrados reactivamente según período, grupo comercial y director
   const filteredRecibos = useMemo(() => {
+    if (!carteraData) return [];
+    let list = carteraData.recibos;
+
+    if (datePreset !== 'all') {
+      if (fechaInicial) {
+        list = list.filter((r) => {
+          const rec = r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '';
+          return rec >= fechaInicial;
+        });
+      }
+      if (fechaFinal) {
+        list = list.filter((r) => {
+          const rec = r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '';
+          return rec <= fechaFinal;
+        });
+      }
+    }
+
+    if (selectedGrupo !== 'all') {
+      list = list.filter((r) => r.grupoNumero === selectedGrupo);
+    }
+    if (selectedDirector !== 'all') {
+      list = list.filter(
+        (r) => (r.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
+      );
+    }
+    return list;
+  }, [carteraData, selectedGrupo, selectedDirector, datePreset, fechaInicial, fechaFinal]);
+
+  // Notas crédito filtradas reactivamente según período, grupo comercial y director
+  const filteredNotas = useMemo(() => {
+    if (!carteraData) return [];
+    let list = carteraData.notas;
+
+    if (datePreset !== 'all') {
+      if (fechaInicial) {
+        list = list.filter((n) => {
+          const f = n.Fecha_Emision ? n.Fecha_Emision.split('T')[0] : '';
+          return f >= fechaInicial;
+        });
+      }
+      if (fechaFinal) {
+        list = list.filter((n) => {
+          const f = n.Fecha_Emision ? n.Fecha_Emision.split('T')[0] : '';
+          return f <= fechaFinal;
+        });
+      }
+    }
+
+    if (selectedGrupo !== 'all') {
+      list = list.filter((n) => n.grupoNumero === selectedGrupo);
+    }
+    if (selectedDirector !== 'all') {
+      list = list.filter(
+        (n) => (n.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
+      );
+    }
+    return list;
+  }, [carteraData, selectedGrupo, selectedDirector, datePreset, fechaInicial, fechaFinal]);
+
+  // Registros comerciales completos para vistas de cohortes (Evolución Base 06/10 y Gestión Día a Día)
+  // Conservan la base al 06/10 y las nuevas facturas, respetando los filtros comerciales
+  const cohortRecords = useMemo(() => {
+    if (!carteraData) return [];
+    let list = carteraData.records;
+    if (selectedGrupo !== 'all') {
+      list = list.filter((r) => r.grupoNumero === selectedGrupo);
+    }
+    if (selectedDirector !== 'all') {
+      list = list.filter(
+        (r) => r.directorNombre.toLowerCase() === selectedDirector.toLowerCase()
+      );
+    }
+    if (selectedExecutive !== 'all') {
+      list = list.filter(
+        (r) => r.Nombre_Empleado.toLowerCase() === selectedExecutive.toLowerCase()
+      );
+    }
+    return list;
+  }, [carteraData, selectedGrupo, selectedDirector, selectedExecutive]);
+
+  const cohortRecibos = useMemo(() => {
     if (!carteraData) return [];
     let list = carteraData.recibos;
     if (selectedGrupo !== 'all') {
@@ -279,8 +425,7 @@ export function App() {
     return list;
   }, [carteraData, selectedGrupo, selectedDirector]);
 
-  // Notas crédito filtradas reactivamente según grupo comercial y director
-  const filteredNotas = useMemo(() => {
+  const cohortNotas = useMemo(() => {
     if (!carteraData) return [];
     let list = carteraData.notas;
     if (selectedGrupo !== 'all') {
@@ -300,10 +445,15 @@ export function App() {
     const set = new Set<string>();
     carteraData.records.forEach((r) => {
       if (selectedGrupo !== 'all' && r.grupoNumero !== selectedGrupo) return;
+      if (
+        selectedDirector !== 'all' &&
+        r.directorNombre.toLowerCase() !== selectedDirector.toLowerCase()
+      )
+        return;
       if (r.Nombre_Empleado) set.add(r.Nombre_Empleado);
     });
     return Array.from(set).sort();
-  }, [carteraData, selectedGrupo]);
+  }, [carteraData, selectedGrupo, selectedDirector]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -313,6 +463,7 @@ export function App() {
     if (selectedExecutive !== 'all') count++;
     if (selectedEstado !== 'all') count++;
     if (onlyOverdue) count++;
+    if (datePreset !== 'all') count++;
     return count;
   }, [
     selectedAging,
@@ -321,6 +472,7 @@ export function App() {
     selectedExecutive,
     selectedEstado,
     onlyOverdue,
+    datePreset,
   ]);
 
   const clearAllFilters = () => {
@@ -330,6 +482,7 @@ export function App() {
     setSelectedExecutive('all');
     setSelectedEstado('all');
     setOnlyOverdue(false);
+    handleSelectPreset('all');
   };
 
   // Descarga rápida de Excel
@@ -401,65 +554,89 @@ export function App() {
             </div>
           </div>
 
-          {/* Rango de Fechas y Presets */}
-          <div className="topbar-controls" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="date-presets-wrap" style={{ display: 'flex', gap: 4 }}>
-              <button
-                type="button"
-                className={`preset-chip ${datePreset === 'today' ? 'active' : ''}`}
-                onClick={() => handleSelectPreset('today')}
-              >
-                Hoy
-              </button>
-              <button
-                type="button"
-                className={`preset-chip ${datePreset === 'current_month' ? 'active' : ''}`}
-                onClick={() => handleSelectPreset('current_month')}
-              >
-                Mes Actual
-              </button>
-              <button
-                type="button"
-                className={`preset-chip ${datePreset === 'last_month' ? 'active' : ''}`}
-                onClick={() => handleSelectPreset('last_month')}
-              >
-                Mes Anterior
-              </button>
-            </div>
-
-            <div className="date-inputs-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="date"
-                className="date-input-field"
-                value={fechaInicial}
-                onChange={(e) => {
-                  setFechaInicial(e.target.value);
-                  setDatePreset('custom');
-                }}
-              />
-              <span style={{ color: '#8e8e93', fontSize: 12 }}>a</span>
-              <input
-                type="date"
-                className="date-input-field"
-                value={fechaFinal}
-                onChange={(e) => {
-                  setFechaFinal(e.target.value);
-                  setDatePreset('custom');
-                }}
-              />
-            </div>
+          {/* BARRA DE MENÚ PRINCIPAL ARRIBA (SEGMENTED NAV ESTILO REMISIONES) */}
+          <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
+            <button
+              type="button"
+              className={view === 'evolucion' ? 'active' : ''}
+              onClick={() => setView('evolucion')}
+              title="Seguimiento exclusivo a la cartera recibida al 06/10/2026 (Base fija entregada)"
+            >
+              <TrendingUp size={15} />
+              <span>Evolución (Base 06/10)</span>
+              <span className="nav-tab-badge purple">Base 06/10</span>
+            </button>
 
             <button
               type="button"
-              className="button button-sm button-secondary"
-              onClick={() => void loadData(true)}
-              disabled={refreshing}
-              title="Sincronizar datos con el ERP"
+              className={view === 'gestion' ? 'active' : ''}
+              onClick={() => setView('gestion')}
+              title="Gestión operativa día a día del proceso (Facturas recaudadas con recibo y nuevas emisiones)"
             >
-              <RefreshCw size={13} className={refreshing ? 'spinner' : ''} />
-              <span>{refreshing ? 'Actualizando...' : 'Actualizar'}</span>
+              <CalendarRange size={15} />
+              <span>Gestión Día a Día</span>
+              <span className="nav-tab-badge green">Proceso Activo</span>
             </button>
-          </div>
+
+            <button
+              type="button"
+              className={view === 'dashboard' ? 'active' : ''}
+              onClick={() => setView('dashboard')}
+              title="Resumen ejecutivo y edades de cartera"
+            >
+              <LayoutDashboard size={15} />
+              <span>Tablero & Edades</span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'facturas' ? 'active' : ''}
+              onClick={() => setView('facturas')}
+              title="Lista detallada de facturas abiertas"
+            >
+              <Layers size={15} />
+              <span>Facturas</span>
+              <span className="nav-tab-badge blue">
+                {formatNumber(filteredRecords.length)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'grupos' ? 'active' : ''}
+              onClick={() => setView('grupos')}
+              title="Supervisión por grupos y directores comerciales"
+            >
+              <Building size={15} />
+              <span>Grupos</span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'recibos' ? 'active' : ''}
+              onClick={() => setView('recibos')}
+              title="Recibos de caja y comprobantes de recaudo"
+            >
+              <CheckCircle2 size={15} />
+              <span>Recibos</span>
+              <span className="nav-tab-badge green">
+                {formatNumber(filteredRecibos.length)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={view === 'notas' ? 'active' : ''}
+              onClick={() => setView('notas')}
+              title="Notas crédito del período"
+            >
+              <Percent size={15} />
+              <span>Notas Crédito</span>
+              <span className="nav-tab-badge purple">
+                {formatNumber(filteredNotas.length)}
+              </span>
+            </button>
+          </nav>
 
           {/* Acciones Rápidas y Usuario */}
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -545,7 +722,7 @@ export function App() {
               {view === 'evolucion'
                 ? 'Evolución de la Base Inicial (06/10)'
                 : view === 'gestion'
-                ? 'Gestión de Cartera Día a Día (Desde 07/10)'
+                ? 'Gestión de Cartera Día a Día (Seguimiento del Proceso)'
                 : view === 'dashboard'
                 ? 'Tablero General de Edades'
                 : view === 'facturas'
@@ -560,97 +737,115 @@ export function App() {
               {view === 'evolucion'
                 ? 'Desmonte exclusivo de la cartera recibida al 06 de octubre de 2026. Seguimiento a la base inicial entregada al equipo comercial.'
                 : view === 'gestion'
-                ? 'Operación diaria del proceso desde el 07 de octubre de 2026: facturas matadas por Recibos de Caja, abonos y nuevas facturas emitidas.'
+                ? 'Operación diaria del proceso: facturas recaudadas por Recibos de Caja, abonos y nuevas facturas emitidas.'
                 : view === 'dashboard'
                 ? 'Panorama consolidado por edades de vencimiento: Corriente, 1-30, 31-60, 61-90, 91-120, 121-180 y +180 días.'
                 : 'Seguimiento integral de cuentas por cobrar, vencimientos, cupos y gestión comercial en tiempo real.'}
             </p>
           </div>
 
-          {/* BOTONES DE VISTA: SEGMENTED NAV ESTILO REMISIONES (APPLE MAC OS) */}
-          <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ marginTop: 18, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className={view === 'evolucion' ? 'active' : ''}
-              onClick={() => setView('evolucion')}
-              title="Seguimiento exclusivo a la cartera recibida al 06/10/2026 (Base fija entregada)"
-            >
-              <TrendingUp size={15} />
-              <span>Evolución (Base 06/10)</span>
-              <span className="nav-tab-badge purple">Base 06/10</span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'gestion' ? 'active' : ''}
-              onClick={() => setView('gestion')}
-              title="Gestión operativa día a día desde el 07 de octubre (Facturas matadas con recibo y nuevas emisiones)"
-            >
-              <CalendarRange size={15} />
-              <span>Gestión (Desde 07/10)</span>
-              <span className="nav-tab-badge green">Proceso 07/10</span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'dashboard' ? 'active' : ''}
-              onClick={() => setView('dashboard')}
-              title="Resumen ejecutivo y edades de cartera"
-            >
-              <LayoutDashboard size={15} />
-              <span>Tablero & Edades</span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'facturas' ? 'active' : ''}
-              onClick={() => setView('facturas')}
-              title="Lista detallada de facturas abiertas"
-            >
-              <Layers size={15} />
-              <span>Facturas</span>
-              <span className="nav-tab-badge blue">
-                {formatNumber(filteredRecords.length)}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'grupos' ? 'active' : ''}
-              onClick={() => setView('grupos')}
-              title="Supervisión por grupos y directores comerciales"
-            >
-              <Building size={15} />
-              <span>Grupos Comerciales</span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'recibos' ? 'active' : ''}
-              onClick={() => setView('recibos')}
-              title="Recibos de caja y comprobantes de recaudo"
-            >
-              <CheckCircle2 size={15} />
-              <span>Recibos de Caja</span>
-              <span className="nav-tab-badge green">
-                {formatNumber(filteredRecibos.length)}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              className={view === 'notas' ? 'active' : ''}
-              onClick={() => setView('notas')}
-              title="Notas crédito del período"
-            >
-              <Percent size={15} />
-              <span>Notas Crédito</span>
-              <span className="nav-tab-badge purple">
-                {formatNumber(filteredNotas.length)}
-              </span>
-            </button>
-          </nav>
         </div>
+
+        {/* BARRA DE CONTROL DE PERÍODO Y FECHAS ESTILO MAC OS */}
+        <section className="date-control-bar" aria-label="Filtro de período de cartera">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Período de Cartera:
+            </span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`preset-chip ${datePreset === 'all' ? 'active' : ''}`}
+                onClick={() => handleSelectPreset('all')}
+                title="Toda la cartera activa sin filtro de corte"
+              >
+                Toda la Cartera ({carteraData?.records.length || 0})
+              </button>
+              <button
+                type="button"
+                className={`preset-chip ${datePreset === 'today' ? 'active' : ''}`}
+                onClick={() => handleSelectPreset('today')}
+                title="Facturas emitidas hoy"
+              >
+                Hoy
+              </button>
+              <button
+                type="button"
+                className={`preset-chip ${datePreset === 'current_month' ? 'active' : ''}`}
+                onClick={() => handleSelectPreset('current_month')}
+                title="Facturas emitidas en el mes actual"
+              >
+                Mes Actual
+              </button>
+              <button
+                type="button"
+                className={`preset-chip ${datePreset === 'last_month' ? 'active' : ''}`}
+                onClick={() => handleSelectPreset('last_month')}
+                title="Facturas emitidas el mes pasado"
+              >
+                Mes Anterior
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Selector de Criterio de Fecha */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0f0f4', padding: '3px 6px', borderRadius: 9 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73' }}>Criterio:</span>
+              <button
+                type="button"
+                className={`preset-chip ${dateCriterion === 'vencimiento' ? 'active' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6 }}
+                onClick={() => setDateCriterion('vencimiento')}
+                title="Filtrar facturas por Fecha de Vencimiento (estándar para análisis de mora y edades)"
+              >
+                Vencimiento
+              </button>
+              <button
+                type="button"
+                className={`preset-chip ${dateCriterion === 'emision' ? 'active' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6 }}
+                onClick={() => setDateCriterion('emision')}
+                title="Filtrar facturas por Fecha de Emisión"
+              >
+                Emisión
+              </button>
+            </div>
+
+            <span style={{ fontSize: 11.5, color: '#6e6e73', fontWeight: 600 }}>
+              {dateCriterion === 'vencimiento' ? 'Rango vencimiento:' : 'Rango emisión:'}
+            </span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaInicial}
+              onChange={(e) => {
+                setFechaInicial(e.target.value);
+                setDatePreset('custom');
+              }}
+            />
+            <span style={{ color: '#8e8e93', fontSize: 12 }}>a</span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaFinal}
+              onChange={(e) => {
+                setFechaFinal(e.target.value);
+                setDatePreset('custom');
+              }}
+            />
+            <button
+              type="button"
+              className="button button-sm button-secondary"
+              onClick={() => void loadData(true)}
+              disabled={refreshing}
+              title="Consultar ERP en tiempo real"
+            >
+              <RefreshCw size={13} className={refreshing ? 'spinner' : ''} />
+              <span>{refreshing ? 'Actualizando...' : 'Actualizar ERP'}</span>
+            </button>
+          </div>
+        </section>
 
         {/* NOTIFICACIÓN DE PROCESO DIARIO ESTILO REMISIONES */}
         {(view === 'evolucion' || view === 'gestion') && (
@@ -662,12 +857,12 @@ export function App() {
                 <strong>
                   {view === 'evolucion'
                     ? 'Estás en la Evolución de la Base Inicial Recibida (06/10/2026)'
-                    : 'Estás en la Gestión Diaria del Proceso (Desde el 07/10/2026)'}
+                    : 'Estás en la Gestión Diaria del Proceso (Día a Día)'}
                 </strong>
                 <span style={{ fontSize: 12.5, color: '#4b5563', display: 'block', marginTop: 1 }}>
                   {view === 'evolucion'
                     ? 'Cartera recibida de partida: 3.157 facturas · Desmonte cronológico con recibos de caja'
-                    : 'Seguimiento en vivo: facturas matadas por Recibos de Caja y nuevas facturas emitidas'}
+                    : 'Seguimiento en vivo: facturas recaudadas por Recibos de Caja y nuevas facturas emitidas'}
                 </span>
               </div>
             </div>
@@ -679,7 +874,7 @@ export function App() {
                   onClick={() => setView('gestion')}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
                 >
-                  <CalendarRange size={14} /> Ver Gestión del Proceso (Desde 07/10) →
+                  <CalendarRange size={14} /> Ver Gestión del Proceso (Día a Día) →
                 </button>
               ) : (
                 <button
@@ -696,7 +891,7 @@ export function App() {
         )}
 
         {/* 3. BARRA DE FILTROS SUPERIOR ESTILO REMISIONES (APPLE MAC OS) */}
-        <section className="filter-bar" aria-label="Filtros del tablero" style={{ marginBottom: activeFiltersCount > 0 ? 10 : 20 }}>
+        <section className="filter-bar" aria-label="Filtros del tablero" style={{ marginBottom: 20 }}>
           <SelectFilter
             label="Grupo Comercial"
             value={String(selectedGrupo)}
@@ -768,7 +963,7 @@ export function App() {
             ]}
           />
 
-          <div style={{ alignSelf: 'flex-end', paddingBottom: 2 }}>
+          <div style={{ alignSelf: 'flex-end', paddingBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
               className={`filter-pill-chip ${onlyOverdue ? 'active-danger' : ''}`}
@@ -794,93 +989,35 @@ export function App() {
               <ShieldAlert size={14} color={onlyOverdue ? '#b91c1c' : '#6b7280'} />
               <span>{onlyOverdue ? 'Filtrado: Solo Vencidas' : 'Solo Cartera Vencida'}</span>
             </button>
-          </div>
-        </section>
 
-        {/* 3.1 CHIPS DE FILTROS ACTIVOS ESTILO REMISIONES */}
-        {activeFiltersCount > 0 && (
-          <section className="active-filters-bar" aria-label="Filtros aplicados" style={{ marginBottom: 20 }}>
-            <div className="active-filters-title">
-              <Filter size={14} />
-              <span>Filtros activos ({activeFiltersCount}):</span>
-            </div>
-            <div className="active-pills-wrap" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              {selectedGrupo !== 'all' && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setSelectedGrupo('all')}
-                  title="Quitar filtro de grupo"
-                >
-                  <span>Grupo: <b>{selectedGrupo === 0 ? 'Gerencia' : `Grupo ${selectedGrupo}`}</b></span>
-                  <X size={13} />
-                </button>
-              )}
-              {selectedDirector !== 'all' && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setSelectedDirector('all')}
-                  title="Quitar filtro de director"
-                >
-                  <span>Director: <b>{selectedDirector}</b></span>
-                  <X size={13} />
-                </button>
-              )}
-              {selectedExecutive !== 'all' && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setSelectedExecutive('all')}
-                  title="Quitar filtro de ejecutivo"
-                >
-                  <span>Ejecutivo: <b>{selectedExecutive}</b></span>
-                  <X size={13} />
-                </button>
-              )}
-              {selectedEstado !== 'all' && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setSelectedEstado('all')}
-                  title="Quitar filtro de estado"
-                >
-                  <span>Estado: <b>{selectedEstado}</b></span>
-                  <X size={13} />
-                </button>
-              )}
-              {onlyOverdue && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setOnlyOverdue(false)}
-                  title="Quitar filtro de vencidas"
-                >
-                  <span>Solo: <b>Vencidas</b></span>
-                  <X size={13} />
-                </button>
-              )}
-              {selectedAging !== 'all' && (
-                <button
-                  type="button"
-                  className="filter-pill-chip"
-                  onClick={() => setSelectedAging('all')}
-                  title="Quitar filtro de edad"
-                >
-                  <span>Edad: <b>{AGING_CONFIG[selectedAging]?.label || selectedAging}</b></span>
-                  <X size={13} />
-                </button>
-              )}
+            {activeFiltersCount > 0 && (
               <button
                 type="button"
-                className="clear-all-pill"
                 onClick={clearAllFilters}
+                style={{
+                  height: 38,
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  whiteSpace: 'nowrap',
+                  background: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  color: '#b91c1c',
+                  fontWeight: 650,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Quitar todos los filtros aplicados"
               >
-                Limpiar todos los filtros
+                <X size={13} />
+                <span>Limpiar ({activeFiltersCount})</span>
               </button>
-            </div>
-          </section>
-        )}
+            )}
+          </div>
+        </section>
 
         {/* 4. CONTENIDO SEGÚN LA VISTA SELECCIONADA */}
         {carteraData && filteredMetrics && (
@@ -901,9 +1038,19 @@ export function App() {
                 />
 
                 <CarteraCharts
+                  records={filteredRecords}
                   agingItems={filteredMetrics.agingItems}
                   groups={filteredMetrics.groups}
                   customers={filteredMetrics.customers}
+                  executives={filteredMetrics.executives}
+                  selectedAging={selectedAging}
+                  onSelectAging={setSelectedAging}
+                  selectedExecutive={selectedExecutive}
+                  onSelectExecutive={setSelectedExecutive}
+                  selectedDirector={selectedDirector}
+                  onSelectDirector={setSelectedDirector}
+                  onSelectRecord={setSelectedInvoice}
+                  onViewFullTable={() => setView('facturas')}
                 />
 
                 <div className="dashboard-subtable-section" style={{ marginTop: 24 }}>
@@ -931,8 +1078,8 @@ export function App() {
             {/* VISTA 1: EVOLUCIÓN DE LA BASE INICIAL (CORTE 06/10) */}
             {view === 'evolucion' && (
               <EvolucionBaseView
-                records={filteredRecords}
-                recibos={filteredRecibos}
+                records={cohortRecords}
+                recibos={cohortRecibos}
                 fechaBase="2026-10-06"
                 onSelectRecord={setSelectedInvoice}
                 onNavigateToGestion={() => setView('gestion')}
@@ -942,12 +1089,12 @@ export function App() {
             {/* VISTA 2: GESTIÓN OPERATIVA DÍA A DÍA (DESDE 07/10) */}
             {view === 'gestion' && (
               <GestionDiaADiaView
-                records={filteredRecords}
-                recibos={filteredRecibos}
+                records={cohortRecords}
+                recibos={cohortRecibos}
                 fechaBase="2026-10-06"
                 onSelectRecord={setSelectedInvoice}
-                onSync={() => loadData()}
-                isLoading={loading}
+                onSync={() => loadData(true)}
+                isLoading={refreshing}
                 onNavigateToEvolucion={() => setView('evolucion')}
               />
             )}
@@ -980,12 +1127,12 @@ export function App() {
 
             {/* VISTA 5: RECIBOS DE CAJA */}
             {view === 'recibos' && (
-              <RecibosCajaView recibos={filteredRecibos} />
+              <RecibosCajaView recibos={carteraData.recibos} />
             )}
 
             {/* VISTA 6: NOTAS CRÉDITO */}
             {view === 'notas' && (
-              <NotasCreditoView notas={filteredNotas} />
+              <NotasCreditoView notas={carteraData.notas} />
             )}
           </>
         )}
@@ -995,6 +1142,7 @@ export function App() {
       {selectedInvoice && (
         <InvoiceDetailModal
           record={selectedInvoice}
+          currentUser={user}
           onClose={() => setSelectedInvoice(null)}
         />
       )}
