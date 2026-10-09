@@ -13,11 +13,14 @@ import {
   Info,
   Clock,
   DollarSign,
+  X,
 } from 'lucide-react';
 import ExcelJSRuntime from 'exceljs';
 import type { ReciboCajaRecord } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
+import { GestoresCobranzaWidget } from './GestoresCobranzaWidget';
+import { getGestorCobranza, type GestorCobranzaId } from '../lib/gestoresCobranza';
 
 interface Props {
   recibos: ReciboCajaRecord[];
@@ -29,6 +32,8 @@ export function RecibosCajaView({ recibos }: Props) {
   // Preset por defecto: Mes Actual (01/10 al 07/10), exactamente la consulta activa de Postman
   const [datePreset, setDatePreset] = useState<DatePreset>('current_month');
   const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
+  const [selectedGestor, setSelectedGestor] = useState<'Todos' | GestorCobranzaId>('Todos');
+  const [selectedAsesorCobranza, setSelectedAsesorCobranza] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -113,12 +118,26 @@ export function RecibosCajaView({ recibos }: Props) {
     };
   }, [recibos]);
 
-  // 3. Filtrado por Director Comercial y Buscador
+  // 3. Filtrado por Director Comercial, Gestor de Cobranza, Asesor y Buscador
   const filtered = useMemo(() => {
     let list = dateFilteredRecibos;
 
     if (selectedDirector !== 'Todos') {
       list = list.filter((r) => (r.directorNombre || '') === selectedDirector);
+    }
+
+    if (selectedGestor !== 'Todos') {
+      list = list.filter((r) => {
+        const gestorRes = getGestorCobranza(r.Nombre_Empleado);
+        return gestorRes.gestorId === selectedGestor;
+      });
+    }
+
+    if (selectedAsesorCobranza) {
+      list = list.filter((r) => {
+        const gestorRes = getGestorCobranza(r.Nombre_Empleado);
+        return gestorRes.asesorCanonico === selectedAsesorCobranza;
+      });
     }
 
     if (!search.trim()) return list;
@@ -132,9 +151,11 @@ export function RecibosCajaView({ recibos }: Props) {
         String(r.Numero_FacturaVenta).includes(term) ||
         (r.Prefijo_FacturaVenta || '').toLowerCase().includes(term) ||
         (r.Nombre_Empleado || '').toLowerCase().includes(term) ||
-        (r.directorNombre || '').toLowerCase().includes(term)
+        (r.directorNombre || '').toLowerCase().includes(term) ||
+        (r.gestorCartera || '').toLowerCase().includes(term) ||
+        (r.asesorCanonico || '').toLowerCase().includes(term)
     );
-  }, [dateFilteredRecibos, selectedDirector, search]);
+  }, [dateFilteredRecibos, selectedDirector, selectedGestor, selectedAsesorCobranza, search]);
 
   // Último recibo registrado para notas dinámicas
   const latestReciboInfo = useMemo(() => {
@@ -239,6 +260,7 @@ export function RecibosCajaView({ recibos }: Props) {
         { header: 'NIT / CC', key: 'nit', width: 16 },
         { header: 'Cliente / Razón Social', key: 'cliente', width: 34 },
         { header: 'Asesor Comercial', key: 'comercial', width: 26 },
+        { header: 'Gestor Cartera', key: 'gestorCartera', width: 22 },
         { header: 'Director Comercial', key: 'director', width: 26 },
         { header: 'Días Pago', key: 'diasPago', width: 12 },
         { header: 'Valor Factura', key: 'valorFactura', width: 18 },
@@ -248,6 +270,7 @@ export function RecibosCajaView({ recibos }: Props) {
 
       filtered.forEach((r) => {
         const isSaldada = r.Valor_Pagado >= r.Valor_Factura && r.Valor_Factura > 0;
+        const gestorInfo = getGestorCobranza(r.Nombre_Empleado);
         const row = worksheet.addRow({
           rc: `RC-${r.Numero_ReciboCaja}`,
           fechaRecaudo: r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '',
@@ -257,6 +280,7 @@ export function RecibosCajaView({ recibos }: Props) {
           nit: r.Identificacion,
           cliente: r.Empresa,
           comercial: r.Nombre_Empleado,
+          gestorCartera: r.gestorCartera || gestorInfo.gestor,
           director: r.directorNombre || 'Sin Asignar',
           diasPago: r.Dias_Pago,
           valorFactura: r.Valor_Factura,
@@ -555,7 +579,23 @@ export function RecibosCajaView({ recibos }: Props) {
         </div>
       )}
 
-      {/* ─── 3. TARJETAS DE KPIS PRINCIPALES ─── */}
+      {/* ─── 3. MÓDULO OFICIAL DE MEDICIÓN DE COBRANZA (WILMER GUALTEROS vs. CAROLINA SÁNCHEZ) ─── */}
+      <GestoresCobranzaWidget
+        recibos={dateFilteredRecibos}
+        selectedGestor={selectedGestor}
+        onSelectGestor={(g) => {
+          setSelectedGestor(g);
+          setSelectedAsesorCobranza(null);
+          setCurrentPage(1);
+        }}
+        selectedAsesor={selectedAsesorCobranza}
+        onSelectAsesor={(a) => {
+          setSelectedAsesorCobranza(a);
+          setCurrentPage(1);
+        }}
+      />
+
+      {/* ─── 4. TARJETAS DE KPIS PRINCIPALES ─── */}
       <div
         style={{
           display: 'grid',
@@ -807,6 +847,7 @@ export function RecibosCajaView({ recibos }: Props) {
 
       {/* ─── 5. TABLA DETALLADA DE RECIBOS DE CAJA ─── */}
       <div
+        id="tabla-recibos-caja"
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: 14,
@@ -861,7 +902,32 @@ export function RecibosCajaView({ recibos }: Props) {
               />
             </div>
 
-            {/* Filtro Director */}
+            {/* Filtro Gestor de Cartera (Wilmer vs Carolina) */}
+            <select
+              value={selectedGestor}
+              onChange={(e) => {
+                setSelectedGestor(e.target.value as any);
+                setSelectedAsesorCobranza(null);
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '7px 12px',
+                fontSize: 12.5,
+                fontWeight: 650,
+                borderRadius: 8,
+                border: selectedGestor !== 'Todos' ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+                backgroundColor: selectedGestor !== 'Todos' ? '#F0F9FF' : '#FFFFFF',
+                color: '#1E293B',
+                outline: 'none',
+              }}
+            >
+              <option value="Todos">Todos los Gestores</option>
+              <option value="wilmer">🔴 Wilmer Gualteros (24 Asesores)</option>
+              <option value="carolina">🔵 Carolina Sánchez (19 Asesores)</option>
+              <option value="otro">⚪ Sin Asignar / Otros</option>
+            </select>
+
+            {/* Filtro Director Comercial */}
             <select
               value={selectedDirector}
               onChange={(e) => {
@@ -886,6 +952,42 @@ export function RecibosCajaView({ recibos }: Props) {
                 </option>
               ))}
             </select>
+
+            {/* Chip de filtro activo por asesor comercial */}
+            {selectedAsesorCobranza && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: '#FEF3C7',
+                  color: '#92400E',
+                  border: '1px solid #FCD34D',
+                  padding: '5px 12px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 750,
+                }}
+              >
+                Asesor: {selectedAsesorCobranza}
+                <button
+                  type="button"
+                  onClick={() => setSelectedAsesorCobranza(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    color: '#92400E',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title="Quitar filtro de asesor"
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            )}
           </div>
 
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#64748B' }}>
@@ -895,7 +997,7 @@ export function RecibosCajaView({ recibos }: Props) {
 
         {/* Tabla */}
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+          <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>#</th>
@@ -905,6 +1007,7 @@ export function RecibosCajaView({ recibos }: Props) {
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Cliente / Empresa</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>NIT</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Asesor Comercial</th>
+                <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Gestor Cartera</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Director</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569', textAlign: 'right' }}>
                   Vr. Factura
@@ -920,7 +1023,7 @@ export function RecibosCajaView({ recibos }: Props) {
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: 'center', padding: '40px 16px', color: '#94A3B8' }}>
+                  <td colSpan={12} style={{ textAlign: 'center', padding: '40px 16px', color: '#94A3B8' }}>
                     No se encontraron recibos de caja para los criterios seleccionados.
                   </td>
                 </tr>
@@ -928,6 +1031,7 @@ export function RecibosCajaView({ recibos }: Props) {
                 paginated.map((rc, idx) => {
                   const globalIdx = (currentPage - 1) * pageSize + idx + 1;
                   const isSaldada = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+                  const gestorInfo = getGestorCobranza(rc.Nombre_Empleado);
                   return (
                     <tr
                       key={rc.id || `rc-${idx}`}
@@ -948,7 +1052,29 @@ export function RecibosCajaView({ recibos }: Props) {
                       </td>
                       <td style={{ padding: '11px 16px', fontWeight: 600, color: '#1E293B' }}>{rc.Empresa}</td>
                       <td style={{ padding: '11px 16px', color: '#64748B', fontSize: 12 }}>{rc.Identificacion}</td>
-                      <td style={{ padding: '11px 16px', color: '#334155' }}>{rc.Nombre_Empleado}</td>
+                      <td style={{ padding: '11px 16px', color: '#334155' }}>
+                        <div style={{ fontWeight: 600 }}>{rc.Nombre_Empleado}</div>
+                        {rc.asesorCanonico && rc.asesorCanonico !== rc.Nombre_Empleado && (
+                          <div style={{ fontSize: 11, color: '#64748B' }}>{rc.asesorCanonico}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: '11px 16px' }}>
+                        <span
+                          style={{
+                            backgroundColor: gestorInfo.badgeBg,
+                            color: gestorInfo.badgeText,
+                            border: `1px solid ${gestorInfo.borderColor}`,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 750,
+                            whiteSpace: 'nowrap',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {gestorInfo.gestor}
+                        </span>
+                      </td>
                       <td style={{ padding: '11px 16px', color: '#475569' }}>
                         {rc.directorNombre || 'Sin Asignar'}
                       </td>

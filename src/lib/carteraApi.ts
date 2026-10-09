@@ -15,6 +15,7 @@ import {
   normalizeName,
   resolveCommercialOrDirector,
 } from './commercialDirectory';
+import { getGestorCobranza } from './gestoresCobranza';
 
 export const AGING_CONFIG: Record<
   AgeBucketKey,
@@ -548,6 +549,7 @@ export async function fetchCarteraCompleta(
   const recibos: ReciboCajaRecord[] = rawRecibosList.map((r, i) => {
     const emp = String(r.Nombre_Empleado || '').trim();
     const resRole = resolveCommercialOrDirector(emp);
+    const resGestor = getGestorCobranza(emp);
     return {
       Grupo_Personal: String(r.Grupo_Personal || ''),
       Nombre_Empleado: emp,
@@ -567,6 +569,8 @@ export async function fetchCarteraCompleta(
       id: `rc-${r.Numero_ReciboCaja}-${i}`,
       grupoNumero: resRole.grupo,
       directorNombre: resRole.directorNombre,
+      gestorCartera: resGestor.gestor,
+      asesorCanonico: resGestor.asesorCanonico,
     };
   });
 

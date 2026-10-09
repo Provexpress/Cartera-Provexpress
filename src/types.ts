@@ -67,6 +67,8 @@ export interface ReciboCajaRecord {
   id: string;
   grupoNumero: number;
   directorNombre: string;
+  gestorCartera?: string;
+  asesorCanonico?: string;
 }
 
 export interface NotaCreditoRecord {
