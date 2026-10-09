@@ -115,6 +115,19 @@ function SelectFilter({
   );
 }
 
+const getInitialView = (): ViewMode => {
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash.replace('#', '') as ViewMode;
+    const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas'];
+    if (validViews.includes(hash)) return hash;
+    try {
+      const saved = sessionStorage.getItem('cartera_view') as ViewMode;
+      if (validViews.includes(saved)) return saved;
+    } catch (_) {}
+  }
+  return 'dashboard';
+};
+
 export function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,8 +144,28 @@ export function App() {
   // Datos del backend
   const [carteraData, setCarteraData] = useState<CarteraDataState | null>(null);
 
-  // Navegación
-  const [view, setView] = useState<ViewMode>('dashboard');
+  // Navegación con sincronización de URL y sesión
+  const [view, setViewRaw] = useState<ViewMode>(getInitialView);
+
+  const setView = (newView: ViewMode) => {
+    setViewRaw(newView);
+    try {
+      sessionStorage.setItem('cartera_view', newView);
+      window.location.hash = newView;
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '') as ViewMode;
+      const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas'];
+      if (validViews.includes(hash)) {
+        setViewRaw(hash);
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   // Filtros interactivos
   const [selectedAging, setSelectedAging] = useState<AgeBucketKey | 'CRITICO_30' | 'all'>('all');
@@ -591,7 +624,6 @@ export function App() {
             >
               <TrendingUp size={15} />
               <span>Evolución (Base 06/10)</span>
-              <span className="nav-tab-badge purple">Base 06/10</span>
             </button>
 
             <button
@@ -602,7 +634,7 @@ export function App() {
             >
               <CalendarRange size={15} />
               <span>Gestión Día a Día</span>
-              <span className="nav-tab-badge green">Proceso Activo</span>
+              <span className="nav-tab-badge green">En Vivo</span>
             </button>
 
             <button
