@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, DollarSign, Filter, Mail, Users, Building, ShieldAlert, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, DollarSign, Filter, Mail, Users, Building, ShieldAlert, CheckCircle, Download } from 'lucide-react';
 import type { ExecutiveSummary, GroupSummary } from '../types';
 import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 
@@ -24,20 +24,60 @@ export function GroupsView({
     3: true,
     4: true,
   });
+  const [isExporting, setIsExporting] = useState(false);
 
   const toggleGroup = (grupo: number) => {
     setExpandedGroups((prev) => ({ ...prev, [grupo]: !prev[grupo] }));
   };
 
+  const handleExportAll = async () => {
+    try {
+      setIsExporting(true);
+      const { generateGroupsExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateGroupsExcel(groups, executives);
+      downloadBufferAsFile(buffer, filename);
+    } catch (err: any) {
+      console.error('Error al exportar estructura comercial:', err);
+      alert('Error al generar Excel.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportGroup = async (grp: GroupSummary) => {
+    try {
+      setIsExporting(true);
+      const { generateGroupsExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateGroupsExcel(groups, executives, grp);
+      downloadBufferAsFile(buffer, filename);
+    } catch (err: any) {
+      console.error('Error al exportar grupo:', err);
+      alert('Error al generar Excel.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="groups-view-container">
-      <div className="view-header-strip">
+      <div className="view-header-strip" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2>Estructura Comercial y Grupos de Cartera</h2>
           <p>
             Supervisión consolidada por directores y fuerza de ventas corporativa Provexpress SAS.
           </p>
         </div>
+        <button
+          type="button"
+          className="button button-sm button-secondary"
+          onClick={handleExportAll}
+          disabled={isExporting}
+          title="Descargar libro Excel profesional con resumen de grupos y ejecutivos"
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          <Download size={14} />
+          <span>{isExporting ? 'Generando Excel…' : 'Exportar Estructura (Excel)'}</span>
+        </button>
       </div>
 
       <div className="groups-grid">
@@ -67,6 +107,15 @@ export function GroupsView({
                 </div>
 
                 <div className="group-header-actions">
+                  <button
+                    type="button"
+                    className="button button-sm button-secondary"
+                    onClick={() => handleExportGroup(grp)}
+                    title="Descargar resumen de este grupo a Excel"
+                  >
+                    <Download size={14} />
+                    <span>Excel</span>
+                  </button>
                   <button
                     type="button"
                     className="button button-sm button-secondary"

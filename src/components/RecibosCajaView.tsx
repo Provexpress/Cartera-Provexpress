@@ -238,83 +238,13 @@ export function RecibosCajaView({ recibos }: Props) {
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage]);
 
-  // Exportar a Excel
+  // Exportar a Excel (diseño ejecutivo institucional)
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
-      const ExcelJSModule = await import('exceljs');
-      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
-      const workbook = new ExcelJSRuntime.Workbook();
-      workbook.creator = 'Provexpress Cartera ERP';
-      workbook.created = new Date();
-
-      const worksheet = workbook.addWorksheet('Recibos de Caja', {
-        views: [{ showGridLines: true }],
-      });
-
-      worksheet.columns = [
-        { header: 'No. Recibo', key: 'rc', width: 14 },
-        { header: 'Fecha Recaudo', key: 'fechaRecaudo', width: 14 },
-        { header: 'Factura Aplicada', key: 'factura', width: 16 },
-        { header: 'Fecha Emisión Fac', key: 'fechaEmision', width: 14 },
-        { header: 'Fecha Venc Fac', key: 'fechaVenc', width: 14 },
-        { header: 'NIT / CC', key: 'nit', width: 16 },
-        { header: 'Cliente / Razón Social', key: 'cliente', width: 34 },
-        { header: 'Asesor Comercial', key: 'comercial', width: 26 },
-        { header: 'Gestor Cartera', key: 'gestorCartera', width: 22 },
-        { header: 'Director Comercial', key: 'director', width: 26 },
-        { header: 'Días Pago', key: 'diasPago', width: 12 },
-        { header: 'Valor Factura', key: 'valorFactura', width: 18 },
-        { header: 'Valor Recaudado', key: 'valorPagado', width: 18 },
-        { header: 'Estado Recaudo', key: 'estado', width: 18 },
-      ];
-
-      filtered.forEach((r) => {
-        const isSaldada = r.Valor_Pagado >= r.Valor_Factura && r.Valor_Factura > 0;
-        const gestorInfo = getGestorCobranza(r.Nombre_Empleado);
-        const row = worksheet.addRow({
-          rc: `RC-${r.Numero_ReciboCaja}`,
-          fechaRecaudo: r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '',
-          factura: `${r.Prefijo_FacturaVenta || 'FVE'} ${r.Numero_FacturaVenta}`,
-          fechaEmision: r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '',
-          fechaVenc: r.Fecha_Vencimiento ? r.Fecha_Vencimiento.split('T')[0] : '',
-          nit: r.Identificacion,
-          cliente: r.Empresa,
-          comercial: r.Nombre_Empleado,
-          gestorCartera: r.gestorCartera || gestorInfo.gestor,
-          director: r.directorNombre || 'Sin Asignar',
-          diasPago: r.Dias_Pago,
-          valorFactura: r.Valor_Factura,
-          valorPagado: r.Valor_Pagado,
-          estado: isSaldada ? '100% RECAUDADA' : 'ABONO PARCIAL',
-        });
-
-        row.getCell('valorFactura').numFmt = '"$"#,##0;[Red]-"$"#,##0;"$0"';
-        row.getCell('valorPagado').numFmt = '"$"#,##0;[Red]-"$"#,##0;"$0"';
-        row.getCell('valorPagado').font = { bold: true, color: { argb: 'FF15803D' } };
-      });
-
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF15803D' },
-      };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Recibos_Caja_Provexpress_${datePreset}_${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { generateRecibosCajaExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateRecibosCajaExcel(filtered, breakdownByDirector, datePreset);
+      downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error al generar Excel de Recibos:', err);
       alert('Ocurrió un error al generar el archivo Excel.');

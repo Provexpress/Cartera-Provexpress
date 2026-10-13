@@ -156,66 +156,12 @@ export function NotasCreditoView({ notas }: Props) {
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
-      const ExcelJSModule = await import('exceljs');
-      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
-      const workbook = new ExcelJSRuntime.Workbook();
-      workbook.creator = 'Provexpress SAS · Cartera';
-      workbook.created = new Date();
-
-      const worksheet = workbook.addWorksheet('Notas Crédito');
-
-      worksheet.columns = [
-        { header: '#', key: 'rank', width: 6 },
-        { header: 'No. Nota Crédito', key: 'nota', width: 18 },
-        { header: 'Factura Afectada', key: 'factura', width: 18 },
-        { header: 'Fecha Emisión', key: 'fecha', width: 16 },
-        { header: 'Cliente / Razón Social', key: 'empresa', width: 36 },
-        { header: 'NIT', key: 'nit', width: 15 },
-        { header: 'Director Comercial', key: 'director', width: 28 },
-        { header: 'Asesor Comercial', key: 'asesor', width: 30 },
-        { header: 'Valor Nota Crédito', key: 'valor', width: 20 },
-      ];
-
-      filtered.forEach((nc, idx) => {
-        const row = worksheet.addRow({
-          rank: idx + 1,
-          nota: `${nc.Prefijo || 'NCE'} ${nc.Numero}`.trim(),
-          factura:
-            nc.Numero_Factura > 0
-              ? `${nc.Prefijo_Factura || 'FVE'} ${nc.Numero_Factura}`.trim()
-              : 'Ajuste General',
-          fecha: nc.Fecha_Emision ? nc.Fecha_Emision.split('T')[0] : '',
-          empresa: nc.Empresa,
-          nit: nc.Identificacion,
-          director: nc.directorNombre || 'Sin Asignar',
-          asesor: nc.Nombre_Empleado,
-          valor: nc.Valor_NotaCredito,
-        });
-
-        row.getCell('valor').numFmt = '"$"#,##0;[Red]-"$"#,##0;"$0"';
-        row.getCell('valor').font = { bold: true, color: { argb: 'FF7E22CE' } };
-      });
-
-      const headerRow = worksheet.getRow(1);
-      headerRow.height = 28;
-      headerRow.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7E22CE' } };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `notas-credito-provexpress-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { generateNotasCreditoExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateNotasCreditoExcel(filtered, datePreset);
+      downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error exportando notas crédito a Excel:', err);
+      alert('Error al generar Excel.');
     } finally {
       setIsExportingExcel(false);
     }

@@ -14,6 +14,7 @@ import {
   Sparkles,
   UserCheck,
   X,
+  Download,
 } from 'lucide-react';
 import type { ReciboCajaRecord } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
@@ -42,11 +43,26 @@ export function GestoresCobranzaWidget({
 }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const [tabDetalle, setTabDetalle] = useState<TabDetalle>('ambos');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Cálculo integral de métricas según los recibos activos en el filtro de fecha actual
   const stats = useMemo(() => calculateGestoresComparison(recibos), [recibos]);
 
   const { wilmer, carolina, lider, diferenciaMonto, diferenciaPorcentaje, diferenciaRecibos } = stats;
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      const { generateGestoresCobranzaExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateGestoresCobranzaExcel(wilmer, carolina);
+      downloadBufferAsFile(buffer, filename);
+    } catch (err: any) {
+      console.error('Error al exportar reporte de gestores:', err);
+      alert('Error al generar Excel de gestores.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleGestorClick = (id: GestorCobranzaId) => {
     if (selectedGestor === id) {
@@ -161,6 +177,30 @@ export function GestoresCobranzaWidget({
               Quitar Filtro Activo
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            title="Exportar comparativo y detalle de gestores a Excel"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#FFFFFF',
+              padding: '7px 14px',
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Download size={14} />
+            {isExporting ? 'Generando...' : 'Exportar a Excel'}
+          </button>
 
           <button
             type="button"

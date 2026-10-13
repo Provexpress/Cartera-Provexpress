@@ -237,72 +237,12 @@ export function EvolucionBaseView({
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
-      const ExcelJSModule = await import('exceljs');
-      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
-      const workbook = new ExcelJSRuntime.Workbook();
-      workbook.creator = 'Provexpress SAS · Cartera';
-      workbook.created = new Date();
-
-      const worksheet = workbook.addWorksheet('Base Inicial 06-10');
-
-      worksheet.columns = [
-        { header: '#', key: 'rank', width: 6 },
-        { header: 'No. Factura', key: 'factura', width: 16 },
-        { header: 'Cliente / Empresa', key: 'empresa', width: 34 },
-        { header: 'NIT', key: 'nit', width: 14 },
-        { header: 'Comercial Asesor', key: 'comercial', width: 28 },
-        { header: 'Director Comercial', key: 'director', width: 26 },
-        { header: 'Saldo Cartera', key: 'saldo', width: 18 },
-        { header: 'Estado Cobro', key: 'estado', width: 18 },
-        { header: 'Categoría Edad', key: 'edad', width: 16 },
-        { header: 'Días Vencimiento', key: 'dias', width: 16 },
-        { header: 'Fecha Emisión', key: 'fechaEmision', width: 16 },
-        { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 16 },
-      ];
-
-      filteredBaseInvoices.forEach((r, idx) => {
-        const key = `${r.Prefijo}-${r.Numero}`.trim().toLowerCase();
-        const rcs = invoiceRecibosMap.get(key) || [];
-        const isKilled = rcs.some((rc) => rc.Valor_Pagado >= rc.Valor_Factura) || r.Valor_Saldo === 0;
-
-        const row = worksheet.addRow({
-          rank: idx + 1,
-          factura: `${r.Prefijo} ${r.Numero}`.trim(),
-          empresa: r.Empresa,
-          nit: r.Identificacion,
-          comercial: r.Nombre_Empleado,
-          director: r.directorNombre,
-          saldo: r.Valor_Saldo,
-          estado: isKilled ? '100% RECAUDADA' : 'PENDIENTE',
-          edad: r.categoriaEdad,
-          dias: r.Dias_Vencimiento,
-          fechaEmision: r.Fecha_Emision?.split('T')[0] || '',
-          fechaVencimiento: r.Fecha_Vencimiento?.split('T')[0] || '',
-        });
-        row.getCell('saldo').numFmt = '"$"#,##0;[Red]-"$"#,##0;"$0"';
-        row.getCell('saldo').font = { bold: true };
-      });
-
-      const headerRow = worksheet.getRow(1);
-      headerRow.height = 28;
-      headerRow.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B21A8' } };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cartera-base-inicial-06-octubre-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { generateEvolucionBaseExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateEvolucionBaseExcel(filteredBaseInvoices, invoiceRecibosMap, fechaBase);
+      downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error exportando Excel:', err);
+      alert('Error al generar Excel.');
     } finally {
       setIsExportingExcel(false);
     }

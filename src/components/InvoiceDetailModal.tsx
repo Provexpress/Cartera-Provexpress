@@ -14,6 +14,7 @@ import {
   Send,
   Database,
   CalendarCheck,
+  Download,
 } from 'lucide-react';
 import type { CarteraRecord } from '../types';
 import { formatCurrency, AGING_CONFIG } from '../lib/carteraApi';
@@ -36,6 +37,21 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<'productos' | 'bitacora'>('productos');
   const [gestiones, setGestiones] = useState<CarteraGestion[]>([]);
   const [loadingGestiones, setLoadingGestiones] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExportingExcel(true);
+      const { generateInvoiceProductsExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
+      const { buffer, filename } = await generateInvoiceProductsExcel(record);
+      downloadBufferAsFile(buffer, filename);
+    } catch (err: any) {
+      console.error('Error al exportar productos de factura:', err);
+      alert('Error al generar Excel.');
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
   const [savingGestion, setSavingGestion] = useState(false);
 
   // Formulario de nueva gestión
@@ -166,31 +182,47 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
           </div>
 
           {/* Selector de Pestañas: Productos vs Bitácora de Cobro */}
-          <div style={{ display: 'flex', gap: 10, margin: '20px 0 14px', borderBottom: '1px solid #e5e5ea', paddingBottom: 10 }}>
-            <button
-              type="button"
-              className={`button button-sm ${activeTab === 'productos' ? 'button-primary' : 'button-secondary'}`}
-              onClick={() => setActiveTab('productos')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Package size={14} />
-              <span>Productos Facturados ({record.Productos?.length || 0})</span>
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '20px 0 14px', borderBottom: '1px solid #e5e5ea', paddingBottom: 10, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className={`button button-sm ${activeTab === 'productos' ? 'button-primary' : 'button-secondary'}`}
+                onClick={() => setActiveTab('productos')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Package size={14} />
+                <span>Productos Facturados ({record.Productos?.length || 0})</span>
+              </button>
 
-            <button
-              type="button"
-              className={`button button-sm ${activeTab === 'bitacora' ? 'button-primary' : 'button-secondary'}`}
-              onClick={() => setActiveTab('bitacora')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <MessageSquare size={14} />
-              <span>Bitácora de Cobro ({gestiones.length})</span>
-              {isSupabaseConfigured && (
-                <span style={{ fontSize: 9.5, padding: '1px 5px', borderRadius: 99, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>
-                  Supabase Live
-                </span>
-              )}
-            </button>
+              <button
+                type="button"
+                className={`button button-sm ${activeTab === 'bitacora' ? 'button-primary' : 'button-secondary'}`}
+                onClick={() => setActiveTab('bitacora')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <MessageSquare size={14} />
+                <span>Bitácora de Cobro ({gestiones.length})</span>
+                {isSupabaseConfigured && (
+                  <span style={{ fontSize: 9.5, padding: '1px 5px', borderRadius: 99, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>
+                    Supabase Live
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {activeTab === 'productos' && record.Productos && record.Productos.length > 0 && (
+              <button
+                type="button"
+                className="button button-sm button-secondary"
+                onClick={handleExportExcel}
+                disabled={isExportingExcel}
+                title="Exportar ítems y productos de esta factura a Excel"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Download size={13} />
+                <span>{isExportingExcel ? 'Generando…' : 'Exportar Productos (Excel)'}</span>
+              </button>
+            )}
           </div>
 
           {/* TAB 1: PRODUCTOS */}
