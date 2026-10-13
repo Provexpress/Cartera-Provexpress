@@ -30,7 +30,6 @@ import {
   Info,
   FileText,
 } from 'lucide-react';
-import ExcelJSRuntime from 'exceljs';
 import type { CarteraRecord, ReciboCajaRecord, NotaCreditoRecord } from '../types';
 import {
   formatCompactCurrency,
@@ -350,6 +349,8 @@ export function GestionDiaADiaView({
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
       const workbook = new ExcelJSRuntime.Workbook();
       workbook.creator = 'Provexpress SAS · Cartera';
       workbook.created = new Date();

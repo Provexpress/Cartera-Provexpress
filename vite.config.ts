@@ -22,11 +22,35 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       input: {
         app: resolve(projectRoot, 'index.html'),
         redirect: resolve(projectRoot, 'redirect.html'),
+      },
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('exceljs')) {
+              return 'vendor-excel';
+            }
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory') || id.includes('decimal.js')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('@azure/msal') || id.includes('@microsoft/microsoft-graph-client')) {
+              return 'vendor-msal';
+            }
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+          }
+        },
       },
     },
   },

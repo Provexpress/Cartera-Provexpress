@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type { Fill, Font } from 'exceljs';
 import type { CarteraDataState, CarteraRecord } from '../types';
 
 export async function generateCarteraExcel(
@@ -6,23 +6,25 @@ export async function generateCarteraExcel(
   records: CarteraRecord[],
   reportTitle = 'Informe_Cartera_Provexpress'
 ): Promise<{ buffer: ArrayBuffer; base64: string; filename: string }> {
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJS = (ExcelJSModule.default || ExcelJSModule) as any;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Provexpress SAS - Sistema de Cartera';
   workbook.created = new Date();
 
-  const primaryFill: ExcelJS.Fill = {
+  const primaryFill: Fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FF003366' },
   };
 
-  const secondaryFill: ExcelJS.Fill = {
+  const secondaryFill: Fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FF0071E3' },
   };
 
-  const headerFont: Partial<ExcelJS.Font> = {
+  const headerFont: Partial<Font> = {
     name: 'Calibri',
     size: 11,
     bold: true,
@@ -188,7 +190,7 @@ export async function generateCarteraExcel(
 
   const headerRowDetail = wsDetail.getRow(1);
   headerRowDetail.height = 24;
-  headerRowDetail.eachCell((cell) => {
+  headerRowDetail.eachCell((cell: any) => {
     cell.font = headerFont;
     cell.fill = primaryFill;
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -246,7 +248,7 @@ export async function generateCarteraExcel(
 
   const headerRowRecibos = wsRecibos.getRow(1);
   headerRowRecibos.height = 24;
-  headerRowRecibos.eachCell((cell) => {
+  headerRowRecibos.eachCell((cell: any) => {
     cell.font = headerFont;
     cell.fill = secondaryFill;
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -290,7 +292,7 @@ export async function generateCarteraExcel(
 
   const headerRowNotas = wsNotas.getRow(1);
   headerRowNotas.height = 24;
-  headerRowNotas.eachCell((cell) => {
+  headerRowNotas.eachCell((cell: any) => {
     cell.font = headerFont;
     cell.fill = primaryFill;
     cell.alignment = { vertical: 'middle', horizontal: 'center' };

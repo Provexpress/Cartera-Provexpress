@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpDown,
   Building,
@@ -47,18 +47,56 @@ import {
 } from './lib/carteraApi';
 import { getExistingProfile, signIn, signOut } from './lib/auth';
 import { LISTA_DIRECTORES } from './lib/commercialDirectory';
-import { downloadBufferAsFile, generateCarteraExcel } from './lib/excelGenerator';
 import { AgingCards } from './components/AgingCards';
-import { CarteraCharts } from './components/CarteraCharts';
-import { CarteraTable } from './components/CarteraTable';
-import { GroupsView } from './components/GroupsView';
-import { RecibosCajaView } from './components/RecibosCajaView';
-import { NotasCreditoView } from './components/NotasCreditoView';
-import { EvolucionBaseView } from './components/EvolucionBaseView';
-import { GestionDiaADiaView } from './components/GestionDiaADiaView';
-import { InvoiceDetailModal } from './components/InvoiceDetailModal';
-import { EmailNotificationModal } from './components/EmailNotificationModal';
 import { WelcomeScreen } from './components/WelcomeScreen';
+
+// Carga diferida (React.lazy) para mantener el arranque ultrarrápido (< 200 KB)
+const CarteraCharts = lazy(() => import('./components/CarteraCharts').then((m) => ({ default: m.CarteraCharts })));
+const CarteraTable = lazy(() => import('./components/CarteraTable').then((m) => ({ default: m.CarteraTable })));
+const GroupsView = lazy(() => import('./components/GroupsView').then((m) => ({ default: m.GroupsView })));
+const RecibosCajaView = lazy(() => import('./components/RecibosCajaView').then((m) => ({ default: m.RecibosCajaView })));
+const NotasCreditoView = lazy(() => import('./components/NotasCreditoView').then((m) => ({ default: m.NotasCreditoView })));
+const EvolucionBaseView = lazy(() => import('./components/EvolucionBaseView').then((m) => ({ default: m.EvolucionBaseView })));
+const GestionDiaADiaView = lazy(() => import('./components/GestionDiaADiaView').then((m) => ({ default: m.GestionDiaADiaView })));
+const InvoiceDetailModal = lazy(() => import('./components/InvoiceDetailModal').then((m) => ({ default: m.InvoiceDetailModal })));
+const EmailNotificationModal = lazy(() => import('./components/EmailNotificationModal').then((m) => ({ default: m.EmailNotificationModal })));
+
+function ViewSkeleton() {
+  return (
+    <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: 100,
+              borderRadius: 14,
+              backgroundColor: '#f1f5f9',
+              animation: 'pulse 1.5s infinite ease-in-out',
+            }}
+          />
+        ))}
+      </div>
+      <div
+        style={{
+          height: 380,
+          borderRadius: 16,
+          backgroundColor: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          color: '#64748b',
+          fontSize: 14,
+        }}
+      >
+        <Loader2 size={20} className="spinner" />
+        <span>Cargando módulo de visualización…</span>
+      </div>
+    </div>
+  );
+}
 
 type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
 type DatePreset = 'all' | 'today' | 'current_month' | 'last_month' | 'custom';
@@ -198,7 +236,7 @@ export function App() {
   }, []);
 
   // Función principal de carga de datos desde ERP
-  const loadData = async (isBackgroundRefresh = false) => {
+  const loadData = async (isBackgroundRefresh = false, forceRefresh = false) => {
     if (!isBackgroundRefresh && !carteraData) setLoading(true);
     else setRefreshing(true);
     setError(null);
@@ -222,7 +260,7 @@ export function App() {
         queryEnd = fechaFinal;
       }
 
-      const data = await fetchCarteraCompleta(queryInit, queryEnd);
+      const data = await fetchCarteraCompleta(queryInit, queryEnd, 'D', forceRefresh);
       setCarteraData(data);
     } catch (err: any) {
       console.error('Error al cargar datos de cartera:', err);
@@ -554,10 +592,11 @@ export function App() {
     }
   };
 
-  // Descarga rápida de Excel
+  // Descarga rápida de Excel (carga diferida de ExcelJS)
   const handleExportExcel = async () => {
     if (!carteraData) return;
     try {
+      const { generateCarteraExcel, downloadBufferAsFile } = await import('./lib/excelGenerator');
       const res = await generateCarteraExcel(carteraData, filteredRecords);
       downloadBufferAsFile(res.buffer, res.filename);
     } catch (err: any) {
@@ -826,7 +865,7 @@ export function App() {
             <button
               type="button"
               className="button button-sm button-secondary"
-              onClick={() => void loadData()}
+              onClick={() => void loadData(false, true)}
               style={{ marginLeft: 'auto' }}
             >
               Reintentar
@@ -959,7 +998,7 @@ export function App() {
               <button
                 type="button"
                 className="button button-sm button-secondary"
-                onClick={() => void loadData(true)}
+                onClick={() => void loadData(true, true)}
                 disabled={refreshing}
                 title="Consultar ERP en tiempo real"
               >
@@ -1123,7 +1162,7 @@ export function App() {
 
         {/* 4. CONTENIDO SEGÚN LA VISTA SELECCIONADA */}
         {carteraData && filteredMetrics && (
-          <>
+          <Suspense fallback={<ViewSkeleton />}>
             {/* VISTA 1: TABLERO & EDADES (REACTIVO CON filteredMetrics) */}
             {view === 'dashboard' && (
               <>
@@ -1195,7 +1234,7 @@ export function App() {
                 recibos={cohortRecibos}
                 fechaBase="2026-10-06"
                 onSelectRecord={setSelectedInvoice}
-                onSync={() => loadData(true)}
+                onSync={() => loadData(true, true)}
                 isLoading={refreshing}
                 onNavigateToEvolucion={() => setView('evolucion')}
               />
@@ -1236,31 +1275,33 @@ export function App() {
             {view === 'notas' && (
               <NotasCreditoView notas={carteraData.notas} />
             )}
-          </>
+          </Suspense>
         )}
       </main>
 
       {/* 5. MODALES INTERACTIVOS */}
-      {selectedInvoice && (
-        <InvoiceDetailModal
-          record={selectedInvoice}
-          currentUser={user}
-          onClose={() => setSelectedInvoice(null)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {selectedInvoice && (
+          <InvoiceDetailModal
+            record={selectedInvoice}
+            currentUser={user}
+            onClose={() => setSelectedInvoice(null)}
+          />
+        )}
 
-      {emailModalOpen && carteraData && (
-        <EmailNotificationModal
-          carteraData={carteraData}
-          targetGroup={emailTargetGroup}
-          targetExecutive={emailTargetExec}
-          onClose={() => {
-            setEmailModalOpen(false);
-            setEmailTargetGroup(undefined);
-            setEmailTargetExec(undefined);
-          }}
-        />
-      )}
+        {emailModalOpen && carteraData && (
+          <EmailNotificationModal
+            carteraData={carteraData}
+            targetGroup={emailTargetGroup}
+            targetExecutive={emailTargetExec}
+            onClose={() => {
+              setEmailModalOpen(false);
+              setEmailTargetGroup(undefined);
+              setEmailTargetExec(undefined);
+            }}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

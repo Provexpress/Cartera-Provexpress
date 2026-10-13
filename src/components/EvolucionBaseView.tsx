@@ -26,7 +26,6 @@ import {
   Building2,
   AlertTriangle,
 } from 'lucide-react';
-import ExcelJSRuntime from 'exceljs';
 import type { CarteraRecord, ReciboCajaRecord } from '../types';
 import {
   formatCompactCurrency,
@@ -238,6 +237,8 @@ export function EvolucionBaseView({
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
       const workbook = new ExcelJSRuntime.Workbook();
       workbook.creator = 'Provexpress SAS · Cartera';
       workbook.created = new Date();

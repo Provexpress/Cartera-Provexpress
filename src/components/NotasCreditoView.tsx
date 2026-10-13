@@ -12,7 +12,6 @@ import {
   Calendar,
   Sparkles,
 } from 'lucide-react';
-import ExcelJSRuntime from 'exceljs';
 import type { NotaCreditoRecord } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
@@ -157,6 +156,8 @@ export function NotasCreditoView({ notas }: Props) {
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
       const workbook = new ExcelJSRuntime.Workbook();
       workbook.creator = 'Provexpress SAS · Cartera';
       workbook.created = new Date();

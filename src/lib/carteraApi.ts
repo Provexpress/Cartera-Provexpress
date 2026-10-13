@@ -496,14 +496,40 @@ export function computeCarteraMetrics(records: CarteraRecord[]): CarteraMetrics 
   };
 }
 
+interface CarteraCacheEntry {
+  data: CarteraDataState;
+  timestamp: number;
+}
+
+const carteraMemoryCache = new Map<string, CarteraCacheEntry>();
+const CARTERA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Invalida el caché en memoria de consultas ERP
+ */
+export function clearCarteraCache(): void {
+  carteraMemoryCache.clear();
+}
+
 /**
  * Consulta las 3 APIs de Cartera, Recibos y Notas Crédito y procesa los tableros
  */
 export async function fetchCarteraCompleta(
   fechaInicial: string,
   fechaFinal: string,
-  tipoReporte = 'D'
+  tipoReporte = 'D',
+  forceRefresh = false
 ): Promise<CarteraDataState> {
+  const cacheKey = `${fechaInicial}_${fechaFinal}_${tipoReporte}`;
+  const now = Date.now();
+
+  if (!forceRefresh) {
+    const cached = carteraMemoryCache.get(cacheKey);
+    if (cached && now - cached.timestamp < CARTERA_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
   const token = await authenticateErp();
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -600,7 +626,7 @@ export async function fetchCarteraCompleta(
   const totalRecaudosPeriodo = recibos.reduce((sum, r) => sum + r.Valor_Pagado, 0);
   const totalNotasPeriodo = notas.reduce((sum, n) => sum + n.Valor_NotaCredito, 0);
 
-  return {
+  const result: CarteraDataState = {
     records,
     recibos,
     notas,
@@ -620,6 +646,9 @@ export async function fetchCarteraCompleta(
     fechaCorte: fechaFinal,
     fechaConsulta: new Date().toISOString(),
   };
+
+  carteraMemoryCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 /**

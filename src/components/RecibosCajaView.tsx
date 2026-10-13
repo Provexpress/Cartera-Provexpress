@@ -15,7 +15,6 @@ import {
   DollarSign,
   X,
 } from 'lucide-react';
-import ExcelJSRuntime from 'exceljs';
 import type { ReciboCajaRecord } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
@@ -243,6 +242,8 @@ export function RecibosCajaView({ recibos }: Props) {
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJSRuntime = (ExcelJSModule.default || ExcelJSModule) as any;
       const workbook = new ExcelJSRuntime.Workbook();
       workbook.creator = 'Provexpress Cartera ERP';
       workbook.created = new Date();
