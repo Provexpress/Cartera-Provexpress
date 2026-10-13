@@ -48,6 +48,7 @@ import {
 import { getExistingProfile, signIn, signOut } from './lib/auth';
 import { LISTA_DIRECTORES } from './lib/commercialDirectory';
 import { AgingCards } from './components/AgingCards';
+import { ActividadDelDiaWidget } from './components/ActividadDelDiaWidget';
 import { WelcomeScreen } from './components/WelcomeScreen';
 
 // Carga diferida (React.lazy) para mantener el arranque ultrarrápido (< 200 KB)
@@ -502,8 +503,15 @@ export function App() {
         (r) => (r.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
       );
     }
+    if (selectedExecutive !== 'all') {
+      list = list.filter(
+        (r) =>
+          (r.Nombre_Empleado || '').toLowerCase() === selectedExecutive.toLowerCase() ||
+          (r.asesorCanonico || '').toLowerCase() === selectedExecutive.toLowerCase()
+      );
+    }
     return list;
-  }, [carteraData, selectedGrupo, selectedDirector]);
+  }, [carteraData, selectedGrupo, selectedDirector, selectedExecutive]);
 
   const cohortNotas = useMemo(() => {
     if (!carteraData) return [];
@@ -516,8 +524,13 @@ export function App() {
         (n) => (n.directorNombre || '').toLowerCase() === selectedDirector.toLowerCase()
       );
     }
+    if (selectedExecutive !== 'all') {
+      list = list.filter(
+        (n) => (n.Nombre_Empleado || '').toLowerCase() === selectedExecutive.toLowerCase()
+      );
+    }
     return list;
-  }, [carteraData, selectedGrupo, selectedDirector]);
+  }, [carteraData, selectedGrupo, selectedDirector, selectedExecutive]);
 
     // Lista de ejecutivos disponibles según el grupo seleccionado
   const availableExecutives = useMemo(() => {
@@ -1178,6 +1191,16 @@ export function App() {
                   onSelectAging={setSelectedAging}
                 />
 
+                <ActividadDelDiaWidget
+                  records={filteredRecords}
+                  recibos={cohortRecibos}
+                  fechaCorte={fechaFinal}
+                  fechaBase="2026-10-06"
+                  onNavigateToGestion={() => setView('gestion')}
+                  onNavigateToRecibos={() => setView('recibos')}
+                  onSelectRecord={setSelectedInvoice}
+                />
+
                 <CarteraCharts
                   records={filteredRecords}
                   agingItems={filteredMetrics.agingItems}
@@ -1222,6 +1245,7 @@ export function App() {
                 records={cohortRecords}
                 recibos={cohortRecibos}
                 fechaBase="2026-10-06"
+                selectedDirectorProp={selectedDirector}
                 onSelectRecord={setSelectedInvoice}
                 onNavigateToGestion={() => setView('gestion')}
               />
@@ -1233,6 +1257,7 @@ export function App() {
                 records={cohortRecords}
                 recibos={cohortRecibos}
                 fechaBase="2026-10-06"
+                selectedDirectorProp={selectedDirector}
                 onSelectRecord={setSelectedInvoice}
                 onSync={() => loadData(true, true)}
                 isLoading={refreshing}

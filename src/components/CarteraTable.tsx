@@ -194,7 +194,15 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`badge ${ageConfig.badgeClass}`}>
+                      <span
+                        className={`badge ${
+                          r.estaVencida
+                            ? r.diasVencimientoCalc > 180
+                              ? 'badge-critical'
+                              : 'badge-danger'
+                            : 'badge-success'
+                        }`}
+                      >
                         {r.estaVencida ? `${r.diasVencimientoCalc} d` : 'Al día'}
                       </span>
                     </td>

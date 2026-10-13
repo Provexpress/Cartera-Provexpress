@@ -34,8 +34,8 @@ export const AGING_CONFIG: Record<
     shortLabel: '1-30 d',
     min: 1,
     max: 30,
-    color: '#0071e3',
-    badgeClass: 'badge-primary',
+    color: '#ef4444',
+    badgeClass: 'badge-danger',
   },
   '31_60': {
     label: '31 a 60 días',
@@ -571,21 +571,69 @@ export async function fetchCarteraCompleta(
   // Enriquecer cartera
   const records: CarteraRecord[] = rawCarteraList.map((r, i) => enrichCarteraRecord(r, i));
 
-  // Enriquecer recibos de caja
+  // Mapa de facturas y clientes para cruce y correlación de recibos y notas
+  const invoiceLookup = new Map<string, CarteraRecord>();
+  const clientCommercialLookup = new Map<string, CarteraRecord>();
+  records.forEach((rec) => {
+    const key = `${rec.Prefijo}-${rec.Numero}`.toUpperCase().trim();
+    invoiceLookup.set(key, rec);
+    if (rec.Identificacion && !clientCommercialLookup.has(rec.Identificacion)) {
+      clientCommercialLookup.set(rec.Identificacion, rec);
+    }
+  });
+
+  // Enriquecer recibos de caja (conectados con su factura de origen y comercial real)
   const recibos: ReciboCajaRecord[] = rawRecibosList.map((r, i) => {
-    const emp = String(r.Nombre_Empleado || '').trim();
-    const resRole = resolveCommercialOrDirector(emp);
-    const resGestor = getGestorCobranza(emp);
+    const prefijoFactura = String(r.Prefijo_FacturaVenta || '').trim().toUpperCase();
+    const numFactura = Number(r.Numero_FacturaVenta) || 0;
+    const invKey = `${prefijoFactura}-${numFactura}`;
+    const matchedInvoice = invoiceLookup.get(invKey);
+    const clientNit = String(r.Identificacion || '').trim();
+    const matchedClient = clientCommercialLookup.get(clientNit);
+
+    const empRaw = String(r.Nombre_Empleado || '').trim();
+    const isGenericAdmin =
+      !empRaw ||
+      empRaw.toLowerCase().includes('administrador') ||
+      empRaw.toLowerCase().includes('caja') ||
+      empRaw.toLowerCase().includes('usuarios');
+
+    let effectiveEmp = empRaw;
+    let grupoNum = 0;
+    let directorNombre = 'Gerencia / Especiales';
+    let asesorCanonico = empRaw;
+
+    if (matchedInvoice) {
+      effectiveEmp = matchedInvoice.Nombre_Empleado;
+      grupoNum = matchedInvoice.grupoNumero;
+      directorNombre = matchedInvoice.directorNombre;
+      asesorCanonico = matchedInvoice.Nombre_Empleado;
+    } else if (matchedClient && isGenericAdmin) {
+      effectiveEmp = matchedClient.Nombre_Empleado;
+      grupoNum = matchedClient.grupoNumero;
+      directorNombre = matchedClient.directorNombre;
+      asesorCanonico = matchedClient.Nombre_Empleado;
+    } else {
+      const resRole = resolveCommercialOrDirector(empRaw);
+      const resGestor = getGestorCobranza(empRaw);
+      effectiveEmp = resGestor.asesorCanonico || empRaw;
+      grupoNum = resRole.grupo;
+      directorNombre = resRole.directorNombre;
+      asesorCanonico = resGestor.asesorCanonico;
+    }
+
+    const resGestor = getGestorCobranza(effectiveEmp);
+
     return {
       Grupo_Personal: String(r.Grupo_Personal || ''),
-      Nombre_Empleado: emp,
-      Identificacion: String(r.Identificacion || '').trim(),
+      Nombre_Empleado: effectiveEmp,
+      Identificacion: clientNit,
       Empresa: String(r.Empresa || '').trim(),
       Prefijo_ReciboCaja: String(r.Prefijo_ReciboCaja || '').trim(),
       Numero_ReciboCaja: Number(r.Numero_ReciboCaja) || 0,
       Fecha_Recaudo: r.Fecha_Recaudo || '',
-      Prefijo_FacturaVenta: String(r.Prefijo_FacturaVenta || '').trim(),
-      Numero_FacturaVenta: Number(r.Numero_FacturaVenta) || 0,
+      Prefijo_FacturaVenta: prefijoFactura,
+      Numero_FacturaVenta: numFactura,
       Fecha_Emision: r.Fecha_Emision || '',
       Fecha_Vencimiento: r.Fecha_Vencimiento || '',
       Dias_PlazoPago: Number(r.Dias_PlazoPago) || 0,
@@ -593,31 +641,62 @@ export async function fetchCarteraCompleta(
       Valor_Factura: Number(r.Valor_Factura) || 0,
       Valor_Pagado: Number(r.Valor_Pagado) || 0,
       id: `rc-${r.Numero_ReciboCaja}-${i}`,
-      grupoNumero: resRole.grupo,
-      directorNombre: resRole.directorNombre,
+      grupoNumero: grupoNum,
+      directorNombre,
       gestorCartera: resGestor.gestor,
-      asesorCanonico: resGestor.asesorCanonico,
+      asesorCanonico,
     };
   });
 
-  // Enriquecer notas crédito
+  // Enriquecer notas crédito (conectadas con su factura de origen y comercial)
   const notas: NotaCreditoRecord[] = rawNotasList.map((n, i) => {
-    const emp = String(n.Nombre_Empleado || '').trim();
-    const resRole = resolveCommercialOrDirector(emp);
+    const prefijoFactura = String(n.Prefijo_Factura || '').trim().toUpperCase();
+    const numFactura = Number(n.Numero_Factura) || 0;
+    const invKey = `${prefijoFactura}-${numFactura}`;
+    const matchedInvoice = invoiceLookup.get(invKey);
+    const clientNit = String(n.Identificacion || '').trim();
+    const matchedClient = clientCommercialLookup.get(clientNit);
+
+    const empRaw = String(n.Nombre_Empleado || '').trim();
+    const isGenericAdmin =
+      !empRaw ||
+      empRaw.toLowerCase().includes('administrador') ||
+      empRaw.toLowerCase().includes('caja') ||
+      empRaw.toLowerCase().includes('usuarios');
+
+    let effectiveEmp = empRaw;
+    let grupoNum = 0;
+    let directorNombre = 'Gerencia / Especiales';
+
+    if (matchedInvoice) {
+      effectiveEmp = matchedInvoice.Nombre_Empleado;
+      grupoNum = matchedInvoice.grupoNumero;
+      directorNombre = matchedInvoice.directorNombre;
+    } else if (matchedClient && isGenericAdmin) {
+      effectiveEmp = matchedClient.Nombre_Empleado;
+      grupoNum = matchedClient.grupoNumero;
+      directorNombre = matchedClient.directorNombre;
+    } else {
+      const resRole = resolveCommercialOrDirector(empRaw);
+      effectiveEmp = empRaw;
+      grupoNum = resRole.grupo;
+      directorNombre = resRole.directorNombre;
+    }
+
     return {
       Grupo_Personal: String(n.Grupo_Personal || ''),
-      Nombre_Empleado: emp,
-      Identificacion: String(n.Identificacion || '').trim(),
+      Nombre_Empleado: effectiveEmp,
+      Identificacion: clientNit,
       Empresa: String(n.Empresa || '').trim(),
       Prefijo: String(n.Prefijo || '').trim(),
       Numero: Number(n.Numero) || 0,
       Fecha_Emision: n.Fecha_Emision || '',
       Valor_NotaCredito: Number(n.Valor_NotaCredito) || 0,
-      Prefijo_Factura: String(n.Prefijo_Factura || '').trim(),
-      Numero_Factura: Number(n.Numero_Factura) || 0,
+      Prefijo_Factura: prefijoFactura,
+      Numero_Factura: numFactura,
       id: `nc-${n.Prefijo}-${n.Numero}-${i}`,
-      grupoNumero: resRole.grupo,
-      directorNombre: resRole.directorNombre,
+      grupoNumero: grupoNum,
+      directorNombre,
     };
   });
 
@@ -678,13 +757,15 @@ export function formatCompactCurrency(amount: number): string {
   const abs = Math.abs(amount);
   const sign = amount < 0 ? '-' : '';
   if (abs >= 1_000_000_000_000) {
-    return `${sign}$ ${(abs / 1_000_000_000_000).toFixed(1).replace('.', ',')} B`;
-  }
-  if (abs >= 1_000_000_000) {
-    return `${sign}$ ${(abs / 1_000_000_000).toFixed(1).replace('.', ',')} mil M`;
+    return `${sign}$ ${(abs / 1_000_000_000_000).toFixed(2).replace('.', ',')} B`;
   }
   if (abs >= 1_000_000) {
-    return `${sign}$ ${(abs / 1_000_000).toFixed(1).replace('.', ',')} M`;
+    const valInMillions = abs / 1_000_000;
+    const formatted = valInMillions.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    });
+    return `${sign}$ ${formatted} M`;
   }
   if (abs >= 1_000) {
     return `${sign}$ ${(abs / 1_000).toFixed(0)} K`;

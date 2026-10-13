@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -39,6 +39,7 @@ interface Props {
   records: CarteraRecord[];
   recibos: ReciboCajaRecord[];
   fechaBase?: string;
+  selectedDirectorProp?: string;
   onSelectRecord?: (record: CarteraRecord) => void;
   onNavigateToGestion?: () => void;
 }
@@ -80,6 +81,7 @@ export function EvolucionBaseView({
   records,
   recibos,
   fechaBase = '2026-10-06',
+  selectedDirectorProp,
   onSelectRecord,
   onNavigateToGestion,
 }: Props) {
@@ -90,7 +92,15 @@ export function EvolucionBaseView({
   // Subfiltro de la tabla de la cohorte
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'killed'>('open');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
+  const [selectedDirector, setSelectedDirector] = useState<string>(
+    selectedDirectorProp && selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos'
+  );
+
+  useEffect(() => {
+    if (selectedDirectorProp) {
+      setSelectedDirector(selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos');
+    }
+  }, [selectedDirectorProp]);
 
   // ─── 1. BASE INICIAL RECIBIDA AL CORTE DE CONTROL (<= 2026-10-06) ─────────
   const baseReceivedInvoices = useMemo(() => {

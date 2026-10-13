@@ -30,7 +30,7 @@ import {
   Info,
   FileText,
 } from 'lucide-react';
-import type { CarteraRecord, ReciboCajaRecord, NotaCreditoRecord } from '../types';
+import type { CarteraRecord, ReciboCajaRecord, NotaCreditoRecord, AgeBucketKey } from '../types';
 import {
   formatCompactCurrency,
   formatCurrency,
@@ -43,6 +43,7 @@ interface Props {
   records: CarteraRecord[];
   recibos: ReciboCajaRecord[];
   fechaBase?: string;
+  selectedDirectorProp?: string;
   onSelectRecord?: (record: CarteraRecord) => void;
   onSync?: () => Promise<void>;
   isLoading?: boolean;
@@ -88,6 +89,7 @@ export function GestionDiaADiaView({
   records,
   recibos,
   fechaBase = '2026-10-06',
+  selectedDirectorProp,
   onSelectRecord,
   onSync,
   isLoading = false,
@@ -166,8 +168,17 @@ export function GestionDiaADiaView({
   // Estado del Monitor Operativo En Vivo (¿Qué Salió y Qué Entró?)
   // Por defecto 'entrantes' para que inmediatamente se vea lo nuevo generado hoy
   const [activeTab, setActiveTab] = useState<'entrantes' | 'salientes' | 'vivas'>('entrantes');
-  const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
+  const [selectedDirector, setSelectedDirector] = useState<string>(
+    selectedDirectorProp && selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos'
+  );
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDesmonteAging, setSelectedDesmonteAging] = useState<string>('all');
+
+  useEffect(() => {
+    if (selectedDirectorProp) {
+      setSelectedDirector(selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos');
+    }
+  }, [selectedDirectorProp]);
 
   // Construcción de la Serie Cronológica de Desmonte (Idéntico a Remisiones)
   const cohortSeries: CohortPoint[] = useMemo(() => {
@@ -299,6 +310,139 @@ export function GestionDiaADiaView({
     [vivasList]
   );
 
+  // ─── DESMONTE POR EDADES (COMPOSICIÓN DEL TOTAL QUE HA BAJADO) ───
+  // ¿De qué edades de cartera eran las facturas recaudadas? (Estilo Remisiones)
+  const desmonteAgingBreakdown = useMemo(() => {
+    const invMap = new Map<string, CarteraRecord>();
+    records.forEach((r) => {
+      invMap.set(`${r.Prefijo}-${r.Numero}`.toUpperCase().trim(), r);
+    });
+
+    const buckets: Record<
+      AgeBucketKey,
+      {
+        key: AgeBucketKey;
+        label: string;
+        shortLabel: string;
+        color: string;
+        badgeClass: string;
+        totalValor: number;
+        count: number;
+      }
+    > = {
+      CORRIENTE: {
+        key: 'CORRIENTE',
+        label: 'No Vencido / Corriente (0 días)',
+        shortLabel: 'Corriente',
+        color: '#16a34a',
+        badgeClass: 'badge-success',
+        totalValor: 0,
+        count: 0,
+      },
+      '1_30': {
+        key: '1_30',
+        label: '1 a 30 días',
+        shortLabel: '1-30 d',
+        color: '#dc2626',
+        badgeClass: 'badge-danger',
+        totalValor: 0,
+        count: 0,
+      },
+      '31_60': {
+        key: '31_60',
+        label: '31 a 60 días',
+        shortLabel: '31-60 d',
+        color: '#f59e0b',
+        badgeClass: 'badge-warning',
+        totalValor: 0,
+        count: 0,
+      },
+      '61_90': {
+        key: '61_90',
+        label: '61 a 90 días',
+        shortLabel: '61-90 d',
+        color: '#ea580c',
+        badgeClass: 'badge-orange',
+        totalValor: 0,
+        count: 0,
+      },
+      '91_120': {
+        key: '91_120',
+        label: '91 a 120 días',
+        shortLabel: '91-120 d',
+        color: '#b91c1c',
+        badgeClass: 'badge-danger',
+        totalValor: 0,
+        count: 0,
+      },
+      '121_180': {
+        key: '121_180',
+        label: '121 a 180 días',
+        shortLabel: '121-180 d',
+        color: '#9333ea',
+        badgeClass: 'badge-purple',
+        totalValor: 0,
+        count: 0,
+      },
+      MAS_180: {
+        key: 'MAS_180',
+        label: 'Más de 180 días (Crítica)',
+        shortLabel: '> 180 d',
+        color: '#7f1d1d',
+        badgeClass: 'badge-critical',
+        totalValor: 0,
+        count: 0,
+      },
+    };
+
+    const targetRecibos = filterMode === 'acumulado' ? recibosDesdeBase : salientesList;
+
+    targetRecibos.forEach((rc) => {
+      const invKey = `${rc.Prefijo_FacturaVenta}-${rc.Numero_FacturaVenta}`.toUpperCase().trim();
+      const matched = invMap.get(invKey);
+      let bucketKey: AgeBucketKey = 'CORRIENTE';
+
+      if (matched) {
+        bucketKey = matched.categoriaEdad;
+      } else {
+        let diasMora = 0;
+        if (rc.Fecha_Vencimiento && rc.Fecha_Recaudo) {
+          const tRec = new Date(rc.Fecha_Recaudo).getTime();
+          const tVenc = new Date(rc.Fecha_Vencimiento).getTime();
+          if (!isNaN(tRec) && !isNaN(tVenc)) {
+            diasMora = Math.floor((tRec - tVenc) / (1000 * 60 * 60 * 24));
+          }
+        } else if (rc.Dias_Pago && rc.Dias_PlazoPago) {
+          diasMora = Math.max(0, rc.Dias_Pago - rc.Dias_PlazoPago);
+        }
+
+        if (diasMora <= 0) bucketKey = 'CORRIENTE';
+        else if (diasMora <= 30) bucketKey = '1_30';
+        else if (diasMora <= 60) bucketKey = '31_60';
+        else if (diasMora <= 90) bucketKey = '61_90';
+        else if (diasMora <= 120) bucketKey = '91_120';
+        else if (diasMora <= 180) bucketKey = '121_180';
+        else bucketKey = 'MAS_180';
+      }
+
+      buckets[bucketKey].totalValor += rc.Valor_Pagado;
+      buckets[bucketKey].count += 1;
+    });
+
+    const totalReducido = Object.values(buckets).reduce((sum, b) => sum + b.totalValor, 0);
+
+    const items = Object.values(buckets).map((b) => ({
+      ...b,
+      percent: totalReducido > 0 ? (b.totalValor / totalReducido) * 100 : 0,
+    }));
+
+    return {
+      items,
+      totalReducido,
+      totalCount: targetRecibos.length,
+    };
+  }, [records, recibosDesdeBase, salientesList, filterMode]);
+
   // Lista de Directores para el filtro
   const directorsList = useMemo(() => {
     const set = new Set<string>();
@@ -317,6 +461,41 @@ export function GestionDiaADiaView({
 
     if (selectedDirector !== 'Todos') {
       list = list.filter((item) => (item.directorNombre || '') === selectedDirector);
+    }
+
+    // Filtro por edad de desmonte cuando se revisan recibos salientes
+    if (activeTab === 'salientes' && selectedDesmonteAging !== 'all') {
+      const invMap = new Map<string, CarteraRecord>();
+      records.forEach((r) => {
+        invMap.set(`${r.Prefijo}-${r.Numero}`.toUpperCase().trim(), r);
+      });
+      list = list.filter((rc: ReciboCajaRecord) => {
+        const invKey = `${rc.Prefijo_FacturaVenta}-${rc.Numero_FacturaVenta}`.toUpperCase().trim();
+        const matched = invMap.get(invKey);
+        let bKey: AgeBucketKey = 'CORRIENTE';
+        if (matched) {
+          bKey = matched.categoriaEdad;
+        } else {
+          let diasMora = 0;
+          if (rc.Fecha_Vencimiento && rc.Fecha_Recaudo) {
+            const tRec = new Date(rc.Fecha_Recaudo).getTime();
+            const tVenc = new Date(rc.Fecha_Vencimiento).getTime();
+            if (!isNaN(tRec) && !isNaN(tVenc)) {
+              diasMora = Math.floor((tRec - tVenc) / (1000 * 60 * 60 * 24));
+            }
+          } else if (rc.Dias_Pago && rc.Dias_PlazoPago) {
+            diasMora = Math.max(0, rc.Dias_Pago - rc.Dias_PlazoPago);
+          }
+          if (diasMora <= 0) bKey = 'CORRIENTE';
+          else if (diasMora <= 30) bKey = '1_30';
+          else if (diasMora <= 60) bKey = '31_60';
+          else if (diasMora <= 90) bKey = '61_90';
+          else if (diasMora <= 120) bKey = '91_120';
+          else if (diasMora <= 180) bKey = '121_180';
+          else bKey = 'MAS_180';
+        }
+        return bKey === selectedDesmonteAging;
+      });
     }
 
     if (!searchTerm.trim()) return list;
@@ -343,7 +522,7 @@ export function GestionDiaADiaView({
         r.Nombre_Empleado?.toLowerCase().includes(q) ||
         r.directorNombre?.toLowerCase().includes(q)
     );
-  }, [activeTab, salientesList, entrantesList, vivasList, selectedDirector, searchTerm]);
+  }, [activeTab, salientesList, entrantesList, vivasList, selectedDirector, selectedDesmonteAging, searchTerm, records]);
 
   // Exportar a Excel con formato y estética de Remisiones
   const handleExportExcel = async () => {
@@ -515,6 +694,155 @@ export function GestionDiaADiaView({
             <span className="timeline-summary-sub">
               <strong>{formatNumber(latestPoint.stillOpenCount)} facturas</strong> aún abiertas de la base inicial
             </span>
+          </div>
+        </div>
+
+        {/* 1.15 COMPOSICIÓN DEL DESMONTE POR EDADES DE VENCIMIENTO (ESTILO REMISIONES) */}
+        <div
+          style={{
+            marginTop: 18,
+            padding: '20px 24px',
+            backgroundColor: '#F8FAFC',
+            borderRadius: 16,
+            border: '1.5px solid #E2E8F0',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.03)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    backgroundColor: '#DCFCE7',
+                    color: '#15803D',
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  Desmonte por Edades
+                </span>
+                <strong style={{ fontSize: 16, color: '#0F172A' }}>
+                  ¿De qué edades eran los {formatCurrency(desmonteAgingBreakdown.totalReducido)} que se redujeron?
+                </strong>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
+                Composición de los recaudos que desmontaron la cartera, clasificados por la antigüedad que tenían las facturas al ser cobradas.
+              </p>
+            </div>
+
+            {selectedDesmonteAging !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedDesmonteAging('all')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#475569',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                Limpiar filtro de edad ({desmonteAgingBreakdown.items.find((i) => i.key === selectedDesmonteAging)?.shortLabel}) ✕
+              </button>
+            )}
+          </div>
+
+          {/* Barra Segmentada de Composición del Desmonte */}
+          <div
+            style={{
+              height: 14,
+              borderRadius: 7,
+              backgroundColor: '#E2E8F0',
+              display: 'flex',
+              overflow: 'hidden',
+              marginBottom: 16,
+            }}
+          >
+            {desmonteAgingBreakdown.items
+              .filter((it) => it.totalValor > 0)
+              .map((it) => (
+                <div
+                  key={it.key}
+                  style={{
+                    width: `${Math.max(1, it.percent)}%`,
+                    backgroundColor: it.color,
+                    transition: 'width 0.3s ease',
+                  }}
+                  title={`${it.label}: ${formatCurrency(it.totalValor)} (${it.percent.toFixed(1)}%)`}
+                />
+              ))}
+          </div>
+
+          {/* Chips / Tarjetitas de cada Rango de Edad */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+              gap: 10,
+            }}
+          >
+            {desmonteAgingBreakdown.items.map((it) => {
+              const isSelected = selectedDesmonteAging === it.key;
+              const hasValue = it.totalValor > 0;
+              return (
+                <div
+                  key={it.key}
+                  onClick={() => {
+                    if (hasValue) {
+                      setSelectedDesmonteAging(isSelected ? 'all' : it.key);
+                      setActiveTab('salientes');
+                    }
+                  }}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                    border: isSelected
+                      ? '2px solid #2563EB'
+                      : hasValue
+                      ? '1px solid #E2E8F0'
+                      : '1px dashed #CBD5E1',
+                    opacity: hasValue ? 1 : 0.6,
+                    cursor: hasValue ? 'pointer' : 'default',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : 'none',
+                  }}
+                  title={hasValue ? `Filtrar facturas recaudadas de ${it.label}` : 'Sin recaudos en este rango'}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: it.color }}>
+                      {it.shortLabel}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 750, color: '#64748B' }}>
+                      {it.percent.toFixed(1)}%
+                    </span>
+                  </div>
+                  <strong style={{ display: 'block', fontSize: 15, color: '#1E293B', marginBottom: 2 }}>
+                    {formatCompactCurrency(it.totalValor)}
+                  </strong>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>
+                    {formatNumber(it.count)} recaudos
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
