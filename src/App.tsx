@@ -58,6 +58,7 @@ import { EvolucionBaseView } from './components/EvolucionBaseView';
 import { GestionDiaADiaView } from './components/GestionDiaADiaView';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { EmailNotificationModal } from './components/EmailNotificationModal';
+import { WelcomeScreen } from './components/WelcomeScreen';
 
 type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
 type DatePreset = 'all' | 'today' | 'current_month' | 'last_month' | 'custom';
@@ -181,13 +182,19 @@ export function App() {
   const [emailTargetGroup, setEmailTargetGroup] = useState<GroupSummary | undefined>();
   const [emailTargetExec, setEmailTargetExec] = useState<ExecutiveSummary | undefined>();
 
-  // Carga inicial de sesión M365 (segura, no bloquea si no está disponible)
+  // Estados de autenticación y puerta de acceso (Auth Gate)
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Carga inicial de sesión M365 (silenciosa)
   useEffect(() => {
     getExistingProfile()
       .then((p) => {
         if (p) setUser(p);
       })
-      .catch((err) => console.log('Sin sesión previa M365:', err));
+      .catch((err) => console.log('Sin sesión previa M365:', err))
+      .finally(() => setAuthChecking(false));
   }, []);
 
   // Función principal de carga de datos desde ERP
@@ -226,10 +233,12 @@ export function App() {
     }
   };
 
-  // Carga inicial una única vez al montar el componente (¡NO recarga al cambiar filtros!)
+  // Cargar datos del ERP únicamente cuando el usuario esté autenticado
   useEffect(() => {
-    void loadData();
-  }, []);
+    if (user) {
+      void loadData();
+    }
+  }, [user]);
 
   // Manejo de cambio de Presets de Fecha
   const handleSelectPreset = (preset: DatePreset) => {
@@ -565,11 +574,21 @@ export function App() {
 
   // Manejo de Login M365
   const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setLoginError(null);
     try {
       const p = await signIn();
+      // Validar dominio corporativo Provexpress
+      const emailLower = (p.email || '').toLowerCase();
+      if (!emailLower.endsWith('@provexpress.com.co') && !emailLower.includes('provexpress')) {
+        throw new Error('Acceso restringido: debes iniciar sesión con una cuenta corporativa @provexpress.com.co.');
+      }
       setUser(p);
     } catch (err: any) {
-      alert(`Error al autenticar con Microsoft 365: ${err.message}`);
+      console.error('Error al autenticar:', err);
+      setLoginError(err.message || 'Error al autenticar con Microsoft 365.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -577,11 +596,55 @@ export function App() {
     try {
       await signOut();
       setUser(null);
+      setCarteraData(null);
     } catch (err: any) {
       console.error(err);
     }
   };
 
+  const handleBypassLocal = () => {
+    setUser({
+      name: 'Desarrollador Provexpress',
+      email: 'especialista.preventa@provexpress.com.co',
+    });
+  };
+
+  // 1. Verificando sesión previa silenciosamente
+  if (authChecking) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-card">
+          <img src="/logo-provexpress.png" alt="Provexpress" />
+          <div className="loading-icon">
+            <Loader2 size={28} />
+          </div>
+          <h2>Verificando credenciales</h2>
+          <p>Validando sesión con Microsoft 365…</p>
+          <div className="loading-track">
+            <span />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Puerta de Acceso (Auth Gate): Si no está autenticado, mostrar pantalla oficial de bienvenida y login
+  if (!user) {
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    return (
+      <WelcomeScreen
+        onLogin={handleLogin}
+        isLoggingIn={isLoggingIn}
+        error={loginError}
+        onBypassLocal={isLocalhost ? handleBypassLocal : undefined}
+      />
+    );
+  }
+
+  // 3. Si está autenticado pero los datos del ERP están cargando
   if (loading && !carteraData) {
     return (
       <div className="loading-screen">
