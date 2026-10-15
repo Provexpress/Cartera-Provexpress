@@ -1279,12 +1279,20 @@ export function App() {
               <GroupsView
                 groups={filteredMetrics.groups}
                 executives={filteredMetrics.executives}
+                records={carteraData.records}
+                onSelectRecord={setSelectedInvoice}
                 onFilterGroup={(g) => {
                   setSelectedGrupo(g);
+                  setSelectedExecutive('all');
                   setView('facturas');
                 }}
-                onFilterExecutive={(name) => {
+                onFilterExecutive={(name, grupo, director) => {
+                  if (grupo !== undefined) setSelectedGrupo(grupo);
+                  if (director) setSelectedDirector(director);
                   setSelectedExecutive(name);
+                  setSelectedAging('all');
+                  setSelectedEstado('all');
+                  setOnlyOverdue(false);
                   setView('facturas');
                 }}
                 onOpenEmailModal={handleOpenEmailModal}

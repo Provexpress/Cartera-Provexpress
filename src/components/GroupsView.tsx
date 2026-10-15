@@ -1,23 +1,29 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, DollarSign, Filter, Mail, Users, Building, ShieldAlert, CheckCircle, Download } from 'lucide-react';
-import type { ExecutiveSummary, GroupSummary } from '../types';
+import { ChevronDown, ChevronUp, DollarSign, Filter, Mail, Users, Building, ShieldAlert, CheckCircle, Download, FileText } from 'lucide-react';
+import type { CarteraRecord, ExecutiveSummary, GroupSummary } from '../types';
 import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
+import { ExecutiveInvoicesModal } from './ExecutiveInvoicesModal';
 
 interface Props {
   groups: GroupSummary[];
   executives: ExecutiveSummary[];
+  records?: CarteraRecord[];
   onFilterGroup: (grupo: number) => void;
-  onFilterExecutive: (name: string) => void;
+  onFilterExecutive: (name: string, grupo?: number, director?: string) => void;
   onOpenEmailModal: (group?: GroupSummary, executive?: ExecutiveSummary) => void;
+  onSelectRecord?: (record: CarteraRecord) => void;
 }
 
 export function GroupsView({
   groups,
   executives,
+  records = [],
   onFilterGroup,
   onFilterExecutive,
   onOpenEmailModal,
+  onSelectRecord,
 }: Props) {
+  const [selectedExecutiveModal, setSelectedExecutiveModal] = useState<ExecutiveSummary | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({
     1: true,
     2: true,
@@ -210,20 +216,27 @@ export function GroupsView({
                       </thead>
                       <tbody>
                         {grpExecs.map((exec) => (
-                          <tr key={exec.nombre}>
+                          <tr
+                            key={exec.nombre}
+                            className="clickable-exec-row"
+                            onClick={() => setSelectedExecutiveModal(exec)}
+                            title={`Toca para ver las ${exec.docCount} facturas pendientes de ${exec.nombre}`}
+                          >
                             <td>
                               <div className="exec-name-cell">
-                                <strong>{exec.nombre}</strong>
-                                <span className="exec-docs-hint">{exec.docCount} facturas</span>
+                                <strong className="exec-name-link">{exec.nombre}</strong>
+                                <span className="exec-docs-hint">
+                                  {exec.docCount} facturas · Clic para ver facturas →
+                                </span>
                               </div>
                             </td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>
                               {formatCurrency(exec.totalSaldo)}
                             </td>
-                            <td style={{ textAlign: 'right', color: '#16a34a' }}>
+                            <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 550 }}>
                               {formatCurrency(exec.totalCorriente)}
                             </td>
-                            <td style={{ textAlign: 'right', color: '#dc2626', fontWeight: 600 }}>
+                            <td style={{ textAlign: 'right', color: '#dc2626', fontWeight: 700 }}>
                               {formatCurrency(exec.totalVencido)}
                             </td>
                             <td style={{ textAlign: 'center' }}>
@@ -231,15 +244,17 @@ export function GroupsView({
                                 {formatPercent(exec.porcentajeVencido)}
                               </span>
                             </td>
-                            <td style={{ textAlign: 'center' }}>
+                            <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                               <div className="row-action-btns">
                                 <button
                                   type="button"
                                   className="btn-link"
-                                  onClick={() => onFilterExecutive(exec.nombre)}
-                                  title="Filtrar facturas de este ejecutivo"
+                                  onClick={() => setSelectedExecutiveModal(exec)}
+                                  title="Ver facturas pendientes de este ejecutivo"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
                                 >
-                                  Ver detalle
+                                  <span>Ver facturas</span>
+                                  <span style={{ fontSize: 13 }}>→</span>
                                 </button>
                                 <button
                                   type="button"
@@ -262,6 +277,20 @@ export function GroupsView({
           );
         })}
       </div>
+
+      {/* MODAL DE FACTURAS PENDIENTES DEL COMERCIAL SELECCIONADO */}
+      {selectedExecutiveModal && (
+        <ExecutiveInvoicesModal
+          executive={selectedExecutiveModal}
+          records={records}
+          onClose={() => setSelectedExecutiveModal(null)}
+          onSelectRecord={onSelectRecord}
+          onViewInFullTable={(name, grupo, director) => {
+            setSelectedExecutiveModal(null);
+            onFilterExecutive(name, grupo, director);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -4616,11 +4616,11 @@ th.numeric, td.numeric { text-align: right; }
 
 .groups-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: 24px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1200px) {
   .groups-grid {
     grid-template-columns: 1fr;
   }
@@ -4635,19 +4635,24 @@ th.numeric, td.numeric { text-align: right; }
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .group-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .group-header-left {
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .group-badge-icon {
@@ -4665,6 +4670,7 @@ th.numeric, td.numeric { text-align: right; }
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .group-title-row h3 {
@@ -4685,11 +4691,18 @@ th.numeric, td.numeric { text-align: right; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.group-header-actions .button {
+  white-space: nowrap;
 }
 
 .group-metrics-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   background: #f8fafc;
   padding: 14px 16px;
@@ -4756,7 +4769,11 @@ th.numeric, td.numeric { text-align: right; }
 }
 
 .execs-table-container {
+  width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
 }
 
 .table.table-sm th {
@@ -4770,14 +4787,36 @@ th.numeric, td.numeric { text-align: right; }
   font-size: 12px;
 }
 
+.clickable-exec-row {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clickable-exec-row:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.clickable-exec-row:hover .exec-name-link {
+  color: var(--blue, #0071e3);
+  text-decoration: underline;
+}
+
 .exec-name-cell {
   display: flex;
   flex-direction: column;
 }
 
+.exec-name-link {
+  font-size: 12.5px;
+  font-weight: 750;
+  color: #111827;
+  transition: color 0.15s ease;
+}
+
 .exec-docs-hint {
   font-size: 10.5px;
-  color: #94a3b8;
+  color: #64748b;
+  margin-top: 2px;
 }
 
 .badge-pill {
