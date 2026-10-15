@@ -6090,3 +6090,22 @@ th.numeric, td.numeric { text-align: right; }
   }
 }
 
+/* ==========================================================================
+   DIRECTORIO DE CLIENTES Y CONTACTOS DE TESORERÍA
+   ========================================================================== */
+.client-row-hover:hover {
+  background-color: #f8fafc !important;
+}
+
+@media (max-width: 768px) {
+  .clientes-view-container .filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .clientes-view-container .hero-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+}
+
+

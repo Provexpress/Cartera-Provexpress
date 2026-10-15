@@ -61,6 +61,8 @@ const EvolucionBaseView = lazy(() => import('./components/EvolucionBaseView').th
 const GestionDiaADiaView = lazy(() => import('./components/GestionDiaADiaView').then((m) => ({ default: m.GestionDiaADiaView })));
 const InvoiceDetailModal = lazy(() => import('./components/InvoiceDetailModal').then((m) => ({ default: m.InvoiceDetailModal })));
 const EmailNotificationModal = lazy(() => import('./components/EmailNotificationModal').then((m) => ({ default: m.EmailNotificationModal })));
+const ClientesView = lazy(() => import('./components/ClientesView').then((m) => ({ default: m.ClientesView })));
+import { DateControlBar, type DatePreset, type DateCriterion } from './components/DateControlBar';
 
 function ViewSkeleton() {
   return (
@@ -99,8 +101,7 @@ function ViewSkeleton() {
   );
 }
 
-type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas';
-type DatePreset = 'all' | 'today' | 'current_month' | 'last_month' | 'custom';
+type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas' | 'clientes';
 
 const AGING_ORDER: AgeBucketKey[] = [
   'CORRIENTE',
@@ -158,7 +159,7 @@ function SelectFilter({
 const getInitialView = (): ViewMode => {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash.replace('#', '') as ViewMode;
-    const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas'];
+    const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
     if (validViews.includes(hash)) return hash;
     try {
       const saved = sessionStorage.getItem('cartera_view') as ViewMode;
@@ -198,7 +199,7 @@ export function App() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '') as ViewMode;
-      const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas'];
+      const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
       if (validViews.includes(hash)) {
         setViewRaw(hash);
       }
@@ -292,8 +293,17 @@ export function App() {
       setFechaInicial('2023-01-01');
       setFechaFinal(todayStr);
     } else if (preset === 'today') {
+      // Corte a hoy: toda la cartera viva evaluada a la fecha de hoy
+      setFechaInicial('2023-01-01');
+      setFechaFinal(todayStr);
+    } else if (preset === 'today_vence') {
       setFechaInicial(todayStr);
       setFechaFinal(todayStr);
+      setDateCriterion('vencimiento');
+    } else if (preset === 'today_emision') {
+      setFechaInicial(todayStr);
+      setFechaFinal(todayStr);
+      setDateCriterion('emision');
     } else if (preset === 'current_month') {
       setFechaInicial(`${y}-${m}-01`);
       setFechaFinal(todayStr);
@@ -315,8 +325,14 @@ export function App() {
 
     let baseList = carteraData.records;
 
-    // 1. Filtrado por Fecha si no es 'all' (Toda la cartera activa viva)
-    if (datePreset !== 'all') {
+    // 1. Filtrado por Fecha según Preset
+    if (datePreset === 'today_vence') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      baseList = baseList.filter((r) => r.Fecha_Vencimiento && r.Fecha_Vencimiento.startsWith(todayStr));
+    } else if (datePreset === 'today_emision') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      baseList = baseList.filter((r) => r.Fecha_Emision && r.Fecha_Emision.startsWith(todayStr));
+    } else if (datePreset !== 'all' && datePreset !== 'today') {
       if (fechaInicial) {
         baseList = baseList.filter((r) => {
           const dt = dateCriterion === 'vencimiento'
@@ -549,7 +565,7 @@ export function App() {
   }, [carteraData, selectedGrupo, selectedDirector]);
 
   // Vistas auxiliares independientes que cuentan con su propio header y filtros
-  const isDedicatedAuxView = view === 'recibos' || view === 'notas';
+  const isDedicatedAuxView = view === 'recibos' || view === 'notas' || view === 'clientes';
   const isCohortView = view === 'evolucion' || view === 'gestion';
   const showHeroBanner = !isDedicatedAuxView;
   const showCarteraDateBar = view === 'dashboard' || view === 'facturas' || view === 'grupos';
@@ -787,6 +803,19 @@ export function App() {
 
             <button
               type="button"
+              className={view === 'clientes' ? 'active' : ''}
+              onClick={() => setView('clientes')}
+              title="Directorio de clientes y actualización de contactos de tesorería"
+            >
+              <Users size={15} />
+              <span>Clientes & Tesorería</span>
+              <span className="nav-tab-badge blue">
+                {formatNumber(filteredMetrics ? filteredMetrics.customers.length : 0)}
+              </span>
+            </button>
+
+            <button
+              type="button"
               className={view === 'recibos' ? 'active' : ''}
               onClick={() => setView('recibos')}
               title="Recibos de caja y comprobantes de recaudo"
@@ -921,105 +950,26 @@ export function App() {
 
         {/* BARRA DE CONTROL DE PERÍODO Y FECHAS ESTILO MAC OS */}
         {showCarteraDateBar && (
-          <section className="date-control-bar" aria-label="Filtro de período de cartera">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#6e6e73', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Período de Cartera:
-              </span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className={`preset-chip ${datePreset === 'all' ? 'active' : ''}`}
-                  onClick={() => handleSelectPreset('all')}
-                  title="Toda la cartera activa sin filtro de corte"
-                >
-                  Toda la Cartera ({carteraData?.records.length || 0})
-                </button>
-                <button
-                  type="button"
-                  className={`preset-chip ${datePreset === 'today' ? 'active' : ''}`}
-                  onClick={() => handleSelectPreset('today')}
-                  title="Facturas emitidas hoy"
-                >
-                  Hoy
-                </button>
-                <button
-                  type="button"
-                  className={`preset-chip ${datePreset === 'current_month' ? 'active' : ''}`}
-                  onClick={() => handleSelectPreset('current_month')}
-                  title="Facturas emitidas en el mes actual"
-                >
-                  Mes Actual
-                </button>
-                <button
-                  type="button"
-                  className={`preset-chip ${datePreset === 'last_month' ? 'active' : ''}`}
-                  onClick={() => handleSelectPreset('last_month')}
-                  title="Facturas emitidas el mes pasado"
-                >
-                  Mes Anterior
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Selector de Criterio de Fecha */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0f0f4', padding: '3px 6px', borderRadius: 9 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#6e6e73' }}>Criterio:</span>
-                <button
-                  type="button"
-                  className={`preset-chip ${dateCriterion === 'vencimiento' ? 'active' : ''}`}
-                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6 }}
-                  onClick={() => setDateCriterion('vencimiento')}
-                  title="Filtrar facturas por Fecha de Vencimiento (estándar para análisis de mora y edades)"
-                >
-                  Vencimiento
-                </button>
-                <button
-                  type="button"
-                  className={`preset-chip ${dateCriterion === 'emision' ? 'active' : ''}`}
-                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6 }}
-                  onClick={() => setDateCriterion('emision')}
-                  title="Filtrar facturas por Fecha de Emisión"
-                >
-                  Emisión
-                </button>
-              </div>
-
-              <span style={{ fontSize: 11.5, color: '#6e6e73', fontWeight: 600 }}>
-                {dateCriterion === 'vencimiento' ? 'Rango vencimiento:' : 'Rango emisión:'}
-              </span>
-              <input
-                type="date"
-                className="date-input-field"
-                value={fechaInicial}
-                onChange={(e) => {
-                  setFechaInicial(e.target.value);
-                  setDatePreset('custom');
-                }}
-              />
-              <span style={{ color: '#8e8e93', fontSize: 12 }}>a</span>
-              <input
-                type="date"
-                className="date-input-field"
-                value={fechaFinal}
-                onChange={(e) => {
-                  setFechaFinal(e.target.value);
-                  setDatePreset('custom');
-                }}
-              />
-              <button
-                type="button"
-                className="button button-sm button-secondary"
-                onClick={() => void loadData(true, true)}
-                disabled={refreshing}
-                title="Consultar ERP en tiempo real"
-              >
-                <RefreshCw size={13} className={refreshing ? 'spinner' : ''} />
-                <span>{refreshing ? 'Actualizando...' : 'Actualizar ERP'}</span>
-              </button>
-            </div>
-          </section>
+          <DateControlBar
+            datePreset={datePreset}
+            dateCriterion={dateCriterion}
+            fechaInicial={fechaInicial}
+            fechaFinal={fechaFinal}
+            totalRecordsCount={carteraData?.records.length || 0}
+            filteredCount={filteredRecords.length}
+            refreshing={refreshing}
+            onSelectPreset={handleSelectPreset}
+            onSelectCriterion={(crit) => setDateCriterion(crit)}
+            onChangeFechaInicial={(d) => {
+              setFechaInicial(d);
+              setDatePreset('custom');
+            }}
+            onChangeFechaFinal={(d) => {
+              setFechaFinal(d);
+              setDatePreset('custom');
+            }}
+            onRefreshERP={() => void loadData(true, true)}
+          />
         )}
 
         {/* NOTIFICACIÓN DE PROCESO DIARIO ESTILO REMISIONES */}
@@ -1307,6 +1257,16 @@ export function App() {
             {/* VISTA 6: NOTAS CRÉDITO */}
             {view === 'notas' && (
               <NotasCreditoView notas={carteraData.notas} />
+            )}
+
+            {/* VISTA 7: DIRECTORIO DE CLIENTES Y TESORERÍA */}
+            {view === 'clientes' && (
+              <ClientesView
+                customers={filteredMetrics.customers}
+                allRecords={carteraData.records}
+                currentUser={user}
+                onSelectRecord={setSelectedInvoice}
+              />
             )}
           </Suspense>
         )}

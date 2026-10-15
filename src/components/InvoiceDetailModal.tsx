@@ -3,7 +3,9 @@ import {
   Calendar,
   CheckCircle2,
   DollarSign,
+  Edit3,
   FileText,
+  Mail,
   Package,
   User,
   Users,
@@ -24,6 +26,11 @@ import {
   isSupabaseConfigured,
   type CarteraGestion,
 } from '../lib/supabaseClient';
+import {
+  getClientContact,
+  type ClientContact,
+} from '../lib/clientContactsStorage';
+import { ClientContactModal } from './ClientContactModal';
 
 interface Props {
   record: CarteraRecord | null;
@@ -53,6 +60,22 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
     }
   };
   const [savingGestion, setSavingGestion] = useState(false);
+  const [clientContact, setClientContact] = useState<ClientContact | null>(() =>
+    getClientContact(record.Identificacion)
+  );
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  // Escuchar actualizaciones de contacto de cliente en vivo
+  useEffect(() => {
+    setClientContact(getClientContact(record.Identificacion));
+    const handleUpdate = (e: any) => {
+      if (e.detail && e.detail.nit === record.Identificacion) {
+        setClientContact(e.detail);
+      }
+    };
+    window.addEventListener('client-contact-updated', handleUpdate);
+    return () => window.removeEventListener('client-contact-updated', handleUpdate);
+  }, [record.Identificacion]);
 
   // Formulario de nueva gestión
   const [tipoGestion, setTipoGestion] = useState<CarteraGestion['tipo_gestion']>('Llamada');
@@ -179,6 +202,82 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
                 <span className="kpi-note">{record.grupoNombre} · {record.directorNombre}</span>
               </div>
             </div>
+          </div>
+
+          {/* Contacto de Tesorería del Cliente */}
+          <div
+            style={{
+              margin: '16px 0 10px',
+              padding: '12px 16px',
+              backgroundColor: clientContact?.correoTesoreria ? '#f0fdf4' : '#fff7ed',
+              borderRadius: 12,
+              border: `1px solid ${clientContact?.correoTesoreria ? '#bbf7d0' : '#fed7aa'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: clientContact?.correoTesoreria ? '#dcfce7' : '#ffedd5',
+                  color: clientContact?.correoTesoreria ? '#15803d' : '#c2410c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Mail size={18} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                    Contacto Tesorería / Cobro:
+                  </span>
+                  {clientContact?.correoTesoreria ? (
+                    <a
+                      href={`mailto:${clientContact.correoTesoreria}`}
+                      style={{
+                        fontSize: 13,
+                        color: '#15803d',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                        wordBreak: 'break-all',
+                      }}
+                      title="Enviar correo a tesorería"
+                    >
+                      {clientContact.correoTesoreria}
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: 12.5, color: '#c2410c', fontWeight: 600 }}>
+                      Sin correo registrado aún
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {clientContact?.contactoTesoreria ? `Responsable: ${clientContact.contactoTesoreria}` : ''}
+                  {clientContact?.telefonoTesoreria ? ` · Tel: ${clientContact.telefonoTesoreria}` : ''}
+                  {clientContact?.observaciones ? ` · ${clientContact.observaciones}` : ''}
+                  {!clientContact?.correoTesoreria &&
+                    'Registre el correo para construir la base institucional y enviar notificaciones directas.'}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="button button-xs button-secondary"
+              onClick={() => setContactModalOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 10px', fontWeight: 600 }}
+            >
+              <Edit3 size={13} />
+              <span>{clientContact?.correoTesoreria ? 'Editar Contacto' : '+ Registrar Correo'}</span>
+            </button>
           </div>
 
           {/* Selector de Pestañas: Productos vs Bitácora de Cobro */}
@@ -460,6 +559,43 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {contactModalOpen && (
+        <ClientContactModal
+          customer={{
+            nit: record.Identificacion,
+            dv: record.Dv,
+            empresa: record.Empresa,
+            cupoCredito: record.Cupo_Credito,
+            estadoCliente: record.Estado_Cliente,
+            plazoPago: record.Plazo_PagoCliente,
+            totalSaldo: record.Valor_Saldo,
+            totalCorriente: record.estaVencida ? 0 : record.Valor_Saldo,
+            totalVencido: record.estaVencida ? record.Valor_Saldo : 0,
+            docCount: 1,
+            comercial: record.Nombre_Empleado,
+            grupo: record.grupoNumero,
+            directorNombre: record.directorNombre,
+            aging: {
+              CORRIENTE: 0,
+              '1_30': 0,
+              '31_60': 0,
+              '61_90': 0,
+              '91_120': 0,
+              '121_180': 0,
+              MAS_180: 0,
+              [record.categoriaEdad]: record.Valor_Saldo,
+            },
+          }}
+          existingContact={clientContact}
+          currentUser={currentUser}
+          onClose={() => setContactModalOpen(false)}
+          onSaved={(saved) => {
+            setClientContact(saved);
+            setContactModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

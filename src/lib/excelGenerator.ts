@@ -2,11 +2,13 @@ import type { Fill, Font } from 'exceljs';
 import type {
   CarteraDataState,
   CarteraRecord,
+  CustomerSummary,
   ExecutiveSummary,
   GroupSummary,
   NotaCreditoRecord,
   ReciboCajaRecord,
 } from '../types';
+import type { ClientContact } from './clientContactsStorage';
 
 // ─── PALETAS Y ESTILOS CORPORATIVOS PROVEXPRESS SAS ─────────────────────────
 const CURRENCY_FMT = '"$"#,##0;[Red]-"$"#,##0;"$0"';
@@ -1293,6 +1295,128 @@ export async function generateInvoiceProductsExcel(
 
   const buffer = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
   const filename = `Factura_${record.Prefijo}_${record.Numero}_Detalle_${new Date().toISOString().split('T')[0]}.xlsx`;
+  return { buffer, filename };
+}
+
+// ─── 8. DIRECTORIO DE CLIENTES Y CONTACTOS DE TESORERÍA ───────────────────────
+export async function generateCustomerDirectoryExcel(
+  customers: CustomerSummary[],
+  contacts: Record<string, ClientContact>,
+  filterLabel = 'General'
+): Promise<{ buffer: ArrayBuffer; filename: string }> {
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJS = (ExcelJSModule.default || ExcelJSModule) as any;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Provexpress S.A.S. - Sistema de Cartera';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Directorio Clientes');
+
+  const totalSaldo = customers.reduce((s, c) => s + c.totalSaldo, 0);
+  const totalVencido = customers.reduce((s, c) => s + c.totalVencido, 0);
+  const totalCorriente = customers.reduce((s, c) => s + c.totalCorriente, 0);
+  const totalDocs = customers.reduce((s, c) => s + c.docCount, 0);
+  const clientesConCorreo = customers.filter((c) => {
+    const ct = contacts[c.nit];
+    return Boolean(ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0);
+  }).length;
+  const pctCobertura = customers.length > 0 ? (clientesConCorreo / customers.length) * 100 : 0;
+
+  applyHeaderBanner(ws, {
+    title: 'Directorio de Clientes y Tesorería',
+    subtitle: `Base de Clientes Activos · Cobertura de Correo: ${clientesConCorreo} de ${customers.length} (${pctCobertura.toFixed(1)}%)`,
+    lastColLetter: 'Q',
+    theme: 'navy',
+    statsText: `Total Cartera: $ ${totalSaldo.toLocaleString('es-CO')}  ·  ${totalDocs.toLocaleString('es-CO')} facturas`,
+  });
+
+  const cols = [
+    { header: '#', key: 'rank', width: 7, isCenter: true },
+    { header: 'NIT', key: 'nit', width: 14, isCenter: true, isBold: true },
+    { header: 'DV', key: 'dv', width: 6, isCenter: true },
+    { header: 'Razón Social / Empresa', key: 'empresa', width: 38, isBold: true },
+    { header: 'Estado', key: 'estado', width: 12, isCenter: true },
+    { header: 'Comercial Asignado', key: 'comercial', width: 26 },
+    { header: 'Grupo Comercial', key: 'grupo', width: 18 },
+    { header: 'Director Comercial', key: 'director', width: 24 },
+    { header: 'Saldo Total', key: 'saldoTotal', width: 20, isCurrency: true, isBold: true },
+    { header: 'Saldo Corriente', key: 'saldoCorriente', width: 18, isCurrency: true },
+    { header: 'Saldo Vencido', key: 'saldoVencido', width: 18, isCurrency: true },
+    { header: '% Vencido', key: 'pctVencido', width: 13, isPercent: true },
+    { header: 'Facturas', key: 'docCount', width: 11, isNumber: true, isCenter: true },
+    { header: 'Correo Tesorería / Pagos', key: 'correoTesoreria', width: 34 },
+    { header: 'Contacto Tesorería', key: 'contactoTesoreria', width: 26 },
+    { header: 'Teléfono / WhatsApp', key: 'telefonoTesoreria', width: 20 },
+    { header: 'Observaciones / Días Pago', key: 'observaciones', width: 36 },
+  ];
+
+  const headerRowIdx = 5;
+  const hRow = ws.getRow(headerRowIdx);
+  cols.forEach((col, idx) => {
+    hRow.getCell(idx + 1).value = col.header;
+    ws.getColumn(idx + 1).width = col.width;
+    ws.getColumn(idx + 1).key = col.key;
+  });
+
+  customers.forEach((c, idx) => {
+    const contact = contacts[c.nit];
+    const pctVenc = c.totalSaldo > 0 ? c.totalVencido / c.totalSaldo : 0;
+    ws.addRow({
+      rank: idx + 1,
+      nit: c.nit,
+      dv: c.dv || '',
+      empresa: c.empresa,
+      estado: c.estadoCliente || 'Activo',
+      comercial: c.comercial,
+      grupo:
+        c.grupo === 1
+          ? 'Grupo Novoa'
+          : c.grupo === 2
+          ? 'Grupo Caballero'
+          : c.grupo === 3
+          ? 'Grupo Beltrán'
+          : c.grupo === 4
+          ? 'Grupo Romero'
+          : 'Gerencia / Especiales',
+      director: c.directorNombre,
+      saldoTotal: c.totalSaldo,
+      saldoCorriente: c.totalCorriente,
+      saldoVencido: c.totalVencido,
+      pctVencido: pctVenc,
+      docCount: c.docCount,
+      correoTesoreria: contact?.correoTesoreria || '',
+      contactoTesoreria: contact?.contactoTesoreria || '',
+      telefonoTesoreria: contact?.telefonoTesoreria || '',
+      observaciones: contact?.observaciones || '',
+    });
+  });
+
+  const dataStart = headerRowIdx + 1;
+  const dataEnd = headerRowIdx + customers.length;
+  formatTableWorksheet(ws, {
+    headerRow: headerRowIdx,
+    dataStartRow: dataStart,
+    dataEndRow: dataEnd,
+    colKeys: cols,
+    theme: 'navy',
+  });
+
+  addTotalRow(
+    ws,
+    dataEnd + 1,
+    {
+      empresa: 'TOTAL CARTERA CLIENTES',
+      saldoTotal: totalSaldo,
+      saldoCorriente: totalCorriente,
+      saldoVencido: totalVencido,
+      docCount: totalDocs,
+    },
+    cols.map((c) => c.key),
+    'A'
+  );
+
+  const buffer = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+  const filename = `Directorio_Clientes_Provexpress_${filterLabel}_${new Date().toISOString().split('T')[0]}.xlsx`;
   return { buffer, filename };
 }
 
