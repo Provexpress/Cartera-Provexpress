@@ -147,6 +147,8 @@ export function DateControlBar({
       className="date-control-bar"
       aria-label="Filtro de período y calendario de cartera"
       style={{
+        position: 'relative',
+        zIndex: 50,
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
@@ -199,7 +201,7 @@ export function DateControlBar({
             </button>
 
             {/* 2. BOTÓN "HOY" CON MENÚ ORIENTADO */}
-            <div style={{ position: 'relative' }} ref={todayRef}>
+            <div style={{ position: 'relative', zIndex: 60 }} ref={todayRef}>
               <div
                 style={{
                   display: 'inline-flex',
@@ -263,30 +265,49 @@ export function DateControlBar({
                   }}
                   title="Opciones orientadas para Hoy"
                 >
-                  <ChevronDown size={13} />
+                  <ChevronDown
+                    size={13}
+                    style={{
+                      transform: todayDropdownOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
                 </button>
               </div>
 
               {/* DROPDOWN DE OPCIONES ORIENTADAS PARA HOY */}
               {todayDropdownOpen && (
                 <div
+                  className="today-options-dropdown"
                   style={{
                     position: 'absolute',
-                    top: 'calc(100% + 6px)',
+                    top: 'calc(100% + 8px)',
                     left: 0,
-                    zIndex: 1000,
+                    zIndex: 100,
                     backgroundColor: '#ffffff',
-                    borderRadius: 12,
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)',
-                    padding: '6px',
-                    minWidth: 260,
+                    borderRadius: 14,
+                    border: '1px solid #cbd5e1',
+                    boxShadow: '0 16px 36px -4px rgba(15, 23, 42, 0.22), 0 6px 16px -2px rgba(15, 23, 42, 0.1)',
+                    padding: '8px',
+                    minWidth: 295,
+                    maxWidth: 'calc(100vw - 32px)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 4,
                   }}
                 >
-                  <div style={{ padding: '6px 10px', fontSize: 11, fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                  <div
+                    style={{
+                      padding: '6px 10px 8px 10px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      borderBottom: '1px solid #f1f5f9',
+                      marginBottom: 2,
+                    }}
+                  >
                     Opciones orientadas al día de Hoy
                   </div>
 
@@ -296,6 +317,7 @@ export function DateControlBar({
                       onSelectPreset('today');
                       setTodayDropdownOpen(false);
                     }}
+                    className={`today-dropdown-item ${datePreset === 'today' ? 'active-today' : ''}`}
                     style={{
                       textAlign: 'left',
                       padding: '8px 10px',
@@ -326,6 +348,7 @@ export function DateControlBar({
                       onSelectPreset('today_vence');
                       setTodayDropdownOpen(false);
                     }}
+                    className={`today-dropdown-item ${datePreset === 'today_vence' ? 'active-today_vence' : ''}`}
                     style={{
                       textAlign: 'left',
                       padding: '8px 10px',
@@ -356,6 +379,7 @@ export function DateControlBar({
                       onSelectPreset('today_emision');
                       setTodayDropdownOpen(false);
                     }}
+                    className={`today-dropdown-item ${datePreset === 'today_emision' ? 'active-today_emision' : ''}`}
                     style={{
                       textAlign: 'left',
                       padding: '8px 10px',

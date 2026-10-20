@@ -92,7 +92,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 100;
   height: 68px;
   display: flex;
   align-items: center;
@@ -211,6 +211,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .source-status i { width: 7px; height: 7px; border-radius: 50%; background: #2fbd68; box-shadow: 0 0 0 3px rgba(47, 189, 104, .12); }
 
 .filter-bar {
+  position: relative;
+  z-index: 10;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -5682,6 +5684,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 /* ─── CONTROLES DE FECHA Y PRESETS ESTILO APPLE HIG ─────────────────────── */
 .date-control-bar {
+  position: relative;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5738,6 +5742,81 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .date-input-field:focus {
   border-color: #0071e3;
   box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+.today-options-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  background-color: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.22), 0 6px 16px -2px rgba(15, 23, 42, 0.1);
+  padding: 8px;
+  min-width: 295px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: todayDropdownFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes todayDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.today-dropdown-item {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #1e293b;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: all 0.15s ease;
+}
+
+.today-dropdown-item:hover {
+  background: #f8fafc !important;
+}
+
+.today-dropdown-item.active-today {
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+}
+
+.today-dropdown-item.active-today:hover {
+  background: #e0f2fe !important;
+}
+
+.today-dropdown-item.active-today_vence {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+
+.today-dropdown-item.active-today_vence:hover {
+  background: #fee2e2 !important;
+}
+
+.today-dropdown-item.active-today_emision {
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
+}
+
+.today-dropdown-item.active-today_emision:hover {
+  background: #dcfce7 !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
