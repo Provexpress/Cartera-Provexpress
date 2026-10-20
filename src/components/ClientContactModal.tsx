@@ -85,10 +85,30 @@ export function ClientContactModal({
       <div
         className="modal-container"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 580, width: '92%' }}
+        style={{
+          maxWidth: 580,
+          width: '94%',
+          backgroundColor: '#ffffff',
+          borderRadius: 20,
+          boxShadow: '0 25px 60px -10px rgba(0, 0, 0, 0.35)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '92vh',
+        }}
       >
         {/* ENCABEZADO */}
-        <div className="modal-header" style={{ padding: '18px 24px', borderBottom: '1px solid #e5e7eb' }}>
+        <div
+          className="modal-header"
+          style={{
+            padding: '18px 24px',
+            borderBottom: '1px solid #e5e7eb',
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{

@@ -1464,13 +1464,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .search-box { height: 40px; min-width: 240px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #d9d9de; border-radius: 10px; background: #fff; color: #77777b; }
 .search-box input { min-width: 0; width: 100%; border: 0; outline: 0; color: #1d1d1f; font-size: 12px; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; min-width: 1200px; border-collapse: collapse; }
-th { height: 42px; padding: 0 14px; border-bottom: 1px solid #e4e4e8; background: #f8f8fa; color: #707075; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-align: left; text-transform: uppercase; }
-td { height: 64px; padding: 9px 14px; border-bottom: 1px solid #ededf0; color: #38383a; font-size: 11px; }
-tbody tr:hover { background: #fafcff; }
-td strong, td span { display: block; }
-td small { display: block; max-width: 240px; margin-top: 4px; color: var(--muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-th.numeric, td.numeric { text-align: right; }
+.table-wrap table { width: 100%; min-width: 1200px; border-collapse: collapse; }
+.table-wrap th { height: 42px; padding: 0 14px; border-bottom: 1px solid #e4e4e8; background: #f8f8fa; color: #707075; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-align: left; text-transform: uppercase; }
+.table-wrap td { height: 64px; padding: 9px 14px; border-bottom: 1px solid #ededf0; color: #38383a; font-size: 11px; }
+.table-wrap tbody tr:hover { background: #fafcff; }
+.table-wrap td strong, .table-wrap td span { display: block; }
+.table-wrap td small { display: block; max-width: 240px; margin-top: 4px; color: var(--muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.table-wrap th.numeric, .table-wrap td.numeric { text-align: right; }
 
 .cell-company { font-size: 11.5px; font-weight: 700; color: #1d1d1f; }
 .cell-nit { font-size: 9.5px; color: var(--muted); margin-top: 2px; }
@@ -4945,30 +4945,70 @@ th.numeric, td.numeric { text-align: right; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(4px);
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
   padding: 20px;
   overflow-y: auto;
 }
 
+.modal-container,
 .modal-card {
-  background: #ffffff;
-  border-radius: 24px;
-  width: min(560px, 100%);
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: #ffffff !important;
+  border-radius: 20px;
+  width: min(580px, 100%);
+  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  max-height: 92vh;
   overflow: hidden;
-  animation: modalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 10;
+  animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.modal-container.modal-large,
 .modal-card.modal-large {
-  width: min(840px, 100%);
+  width: min(1040px, 95vw) !important;
+}
+
+/* ─── TABLA DE CARTERA CORPORATIVA ─── */
+.cartera-table,
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background-color: #ffffff;
+}
+
+.cartera-table th,
+.table th {
+  padding: 12px 14px;
+  background-color: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1.5px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.cartera-table td,
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.cartera-table tbody tr:hover,
+.table tbody tr:hover {
+  background-color: #f8fafc;
 }
 
 @keyframes modalIn {
@@ -6057,6 +6097,8 @@ th.numeric, td.numeric { text-align: right; }
   .modal-overlay {
     padding: 8px !important;
   }
+  .modal-container,
+  .modal-container.modal-large,
   .modal-card,
   .modal-card.modal-large,
   .modal-dialog,

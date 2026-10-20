@@ -127,6 +127,8 @@ export function ExecutiveInvoicesModal({
           flexDirection: 'column',
           borderRadius: 20,
           boxShadow: '0 24px 60px rgba(0, 0, 0, 0.25)',
+          backgroundColor: '#ffffff',
+          overflow: 'hidden',
         }}
       >
         {/* ─── HEADER DEL MODAL ─── */}
@@ -419,15 +421,15 @@ export function ExecutiveInvoicesModal({
               </p>
             </div>
           ) : (
-            <table className="table" style={{ width: '100%', marginTop: 8 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '140px' }}>Documento</th>
-                  <th>Cliente</th>
-                  <th style={{ width: '130px' }}>Vencimiento</th>
-                  <th style={{ textAlign: 'center', width: '110px' }}>Estado / Mora</th>
-                  <th style={{ textAlign: 'right', width: '150px' }}>Saldo Pendiente</th>
-                  <th style={{ textAlign: 'center', width: '100px' }}>Acción</th>
+            <table className="table" style={{ width: '100%', marginTop: 8, borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 3, backgroundColor: '#f8fafc' }}>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ width: '140px', backgroundColor: '#f8fafc' }}>Documento</th>
+                  <th style={{ backgroundColor: '#f8fafc' }}>Cliente</th>
+                  <th style={{ width: '130px', backgroundColor: '#f8fafc' }}>Vencimiento</th>
+                  <th style={{ textAlign: 'center', width: '110px', backgroundColor: '#f8fafc' }}>Estado / Mora</th>
+                  <th style={{ textAlign: 'right', width: '150px', backgroundColor: '#f8fafc' }}>Saldo Pendiente</th>
+                  <th style={{ textAlign: 'center', width: '100px', backgroundColor: '#f8fafc' }}>Acción</th>
                 </tr>
               </thead>
               <tbody>

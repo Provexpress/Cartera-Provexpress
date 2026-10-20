@@ -54,6 +54,8 @@ export function ClientesView({
   const [selectedGrupo, setSelectedGrupo] = useState<number | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortOrder>('saldo_desc');
   const [isExporting, setIsExporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   // Modales
   const [editingCustomer, setEditingCustomer] = useState<CustomerSummary | null>(null);
@@ -192,6 +194,19 @@ export function ClientesView({
     if (!inspectingCustomer) return [];
     return allRecords.filter((r) => r.Identificacion === inspectingCustomer.nit);
   }, [inspectingCustomer, allRecords]);
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, contactFilter, selectedGrupo, sortBy, pageSize]);
+
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedCustomers = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, safeCurrentPage, pageSize]);
 
   return (
     <div className="clientes-view-container" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -503,18 +518,18 @@ export function ClientesView({
 
         <div style={{ overflowX: 'auto', maxHeight: '72vh' }}>
           <table className="cartera-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: '#f8fafc' }}>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 260 }}>Cliente / Razón Social</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 200 }}>Comercial & Grupo</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: 150 }}>Saldo Total</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: 140 }}>Estado Mora</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 280 }}>Contacto Tesorería / Correo</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: 150 }}>Acciones</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 260, backgroundColor: '#f8fafc' }}>Cliente / Razón Social</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 200, backgroundColor: '#f8fafc' }}>Comercial & Grupo</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: 150, backgroundColor: '#f8fafc' }}>Saldo Total</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: 140, backgroundColor: '#f8fafc' }}>Estado Mora</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', minWidth: 280, backgroundColor: '#f8fafc' }}>Contacto Tesorería / Correo</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: 150, backgroundColor: '#f8fafc' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.length === 0 ? (
+              {paginatedCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                     <Users size={32} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
@@ -522,7 +537,7 @@ export function ClientesView({
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((cust) => {
+                paginatedCustomers.map((cust) => {
                   const contact = contacts[cust.nit];
                   const hasEmail = Boolean(contact && contact.correoTesoreria && contact.correoTesoreria.trim().length > 0);
                   const pctVencido = cust.totalSaldo > 0 ? (cust.totalVencido / cust.totalSaldo) * 100 : 0;
@@ -722,6 +737,99 @@ export function ClientesView({
             </tbody>
           </table>
         </div>
+
+        {/* 5. FOOTER DE PAGINACIÓN */}
+        {filteredCustomers.length > 0 && (
+          <div
+            style={{
+              padding: '12px 20px',
+              borderTop: '1px solid #e2e8f0',
+              backgroundColor: '#fafbfc',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 13, color: '#64748b' }}>
+              Mostrando{' '}
+              <strong style={{ color: '#0f172a' }}>
+                {(safeCurrentPage - 1) * pageSize + 1} -{' '}
+                {Math.min(safeCurrentPage * pageSize, filteredCustomers.length)}
+              </strong>{' '}
+              de <strong style={{ color: '#0f172a' }}>{formatNumber(filteredCustomers.length)}</strong> clientes
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: '#64748b' }}>Por página:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid #cbd5e1',
+                    fontSize: 12,
+                    backgroundColor: '#ffffff',
+                    color: '#334155',
+                    fontWeight: 600,
+                  }}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className="button button-xs button-secondary"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage <= 1}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 12,
+                    opacity: safeCurrentPage <= 1 ? 0.5 : 1,
+                    cursor: safeCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  « Anterior
+                </button>
+
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#334155',
+                    padding: '0 6px',
+                    minWidth: 60,
+                    textAlign: 'center',
+                  }}
+                >
+                  {safeCurrentPage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  className="button button-xs button-secondary"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage >= totalPages}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 12,
+                    opacity: safeCurrentPage >= totalPages ? 0.5 : 1,
+                    cursor: safeCurrentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Siguiente »
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MODAL 1: EDITAR / REGISTRAR CONTACTO */}
