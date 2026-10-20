@@ -671,61 +671,67 @@ export function EvolucionBaseView({
                 tabIndex={0}
                 title={`Ver desmonte al ${formatCutoffText(pt.cutoff)}`}
               >
-                <div className="mgmt-day-card-date">
-                  <strong>{formatCutoffText(pt.cutoff)}</strong>
-                  <div className="mgmt-day-chips">
-                    {isSelected && <span className="evolution-chip active">Seleccionado</span>}
-                    {isInitial && <span className="evolution-chip initial">Base inicial</span>}
-                    {isToday && <span className="evolution-chip latest" style={{ backgroundColor: '#0284c7', color: '#fff' }}>Hoy</span>}
-                    {isLastReciboDay && <span className="evolution-chip" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>Último recaudo</span>}
+                {/* Cabecera: Fecha a la izquierda y Balance / Desmonte del día a la derecha */}
+                <div className="mgmt-day-card-header">
+                  <div className="mgmt-day-card-date">
+                    <strong>{formatCutoffText(pt.cutoff)}</strong>
+                    <div className="mgmt-day-chips">
+                      {isSelected && <span className="evolution-chip active">Seleccionado</span>}
+                      {isInitial && <span className="evolution-chip initial">Base inicial</span>}
+                      {isToday && <span className="evolution-chip latest" style={{ backgroundColor: '#0284c7', color: '#fff' }}>Hoy</span>}
+                      {isLastReciboDay && <span className="evolution-chip" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>Último recaudo</span>}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`mgmt-day-card-balance tone-${
+                      isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
+                    }`}
+                  >
+                    {isInitial ? (
+                      <div className="mgmt-balance-body">
+                        <strong className="mgmt-balance-amount">$ 0</strong>
+                        <small className="mgmt-balance-pct">Línea base</small>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="mgmt-balance-icon down-icon">▼</span>
+                        <div className="mgmt-balance-body">
+                          <strong className="mgmt-balance-amount">
+                            -{formatCurrency(dailyWithdrawn)}
+                          </strong>
+                          <small className="mgmt-balance-pct">
+                            Bajó {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
+                          </small>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="mgmt-day-card-saldo">
-                  <small className="mgmt-day-card-sublabel">Saldo restante</small>
-                  <strong className="mgmt-day-card-money">{formatCurrency(pt.stillOpenPending)}</strong>
-                  <small className="text-muted">{formatNumber(pt.stillOpenCount)} facturas abiertas</small>
-                </div>
+                {/* Métricas clave en rejilla responsiva auto-ajustable */}
+                <div className="mgmt-day-card-metrics">
+                  <div className="mgmt-day-card-metric-cell">
+                    <small className="mgmt-day-card-sublabel">Saldo restante</small>
+                    <strong className="mgmt-day-card-money">{formatCurrency(pt.stillOpenPending)}</strong>
+                    <small className="text-muted">{formatNumber(pt.stillOpenCount)} facturas abiertas</small>
+                  </div>
 
-                <div className="mgmt-day-card-flow out">
-                  <small className="mgmt-day-card-sublabel">⬇ Salieron este día (Recaudos)</small>
-                  {isInitial ? (
-                    <span className="text-muted" style={{ fontSize: '11px' }}>Base de partida</span>
-                  ) : dailyCount > 0 ? (
-                    <>
-                      <strong className="mgmt-flow-out">-{formatNumber(dailyCount)} facturas</strong>
-                      <small style={{ color: '#15803d', fontSize: '10px', fontWeight: 650 }}>
-                        -{formatCurrency(dailyWithdrawn)}
-                      </small>
-                    </>
-                  ) : (
-                    <span className="text-muted" style={{ fontSize: '11px' }}>0 facturas salieron</span>
-                  )}
-                </div>
-
-                <div
-                  className={`mgmt-day-card-balance tone-${
-                    isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
-                  }`}
-                >
-                  {isInitial ? (
-                    <div className="mgmt-balance-body">
-                      <strong className="mgmt-balance-amount">$ 0</strong>
-                      <small className="mgmt-balance-pct">Línea base</small>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="mgmt-balance-icon down-icon">▼</span>
-                      <div className="mgmt-balance-body">
-                        <strong className="mgmt-balance-amount">
+                  <div className="mgmt-day-card-metric-cell">
+                    <small className="mgmt-day-card-sublabel">⬇ Salieron este día (Recaudos)</small>
+                    {isInitial ? (
+                      <span className="text-muted" style={{ fontSize: '11px' }}>Base de partida</span>
+                    ) : dailyCount > 0 ? (
+                      <>
+                        <strong className="mgmt-flow-out">-{formatNumber(dailyCount)} facturas</strong>
+                        <small style={{ color: '#15803d', fontSize: '10px', fontWeight: 650 }}>
                           -{formatCurrency(dailyWithdrawn)}
-                        </strong>
-                        <small className="mgmt-balance-pct">
-                          Bajó {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
                         </small>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: '11px' }}>0 facturas salieron</span>
+                    )}
+                  </div>
                 </div>
               </div>
             );

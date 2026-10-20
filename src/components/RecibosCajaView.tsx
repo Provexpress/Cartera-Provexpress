@@ -590,10 +590,12 @@ export function RecibosCajaView({ recibos }: Props) {
 
         {/* 4. RANGO DE FECHAS DIRECTO (DE TAL A TAL) */}
         <div
+          className="date-range-picker-group"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
+            flexWrap: 'wrap',
             backgroundColor: datePreset === 'custom' && !currentSelectedMonthKey ? '#F0FDF4' : '#F8FAFC',
             border: datePreset === 'custom' && !currentSelectedMonthKey ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
             padding: '4px 10px',

@@ -439,10 +439,12 @@ export function DateControlBar({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {/* 4. RANGO DE FECHAS DIRECTO (DE TAL A TAL) */}
           <div
+            className="date-range-picker-group"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
+              flexWrap: 'wrap',
               backgroundColor: datePreset === 'custom' && !currentSelectedMonthKey ? '#eff6ff' : '#f8fafc',
               border: datePreset === 'custom' && !currentSelectedMonthKey ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
               padding: '3px 8px',

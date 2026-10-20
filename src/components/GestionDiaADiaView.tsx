@@ -1067,77 +1067,83 @@ export function GestionDiaADiaView({
                 tabIndex={0}
                 title={`Ver desmonte al ${formatCutoffText(pt.cutoff)}`}
               >
-                <div className="mgmt-day-card-date">
-                  <strong>{formatCutoffText(pt.cutoff)}</strong>
-                  <div className="mgmt-day-chips">
-                    {isSelected && <span className="evolution-chip active">Activo</span>}
-                    {isInitial && <span className="evolution-chip initial">Base inicial</span>}
-                    {isLatest && !isSelected && <span className="evolution-chip latest">Hoy</span>}
+                {/* Cabecera: Fecha a la izquierda y Balance / Desmonte del día a la derecha */}
+                <div className="mgmt-day-card-header">
+                  <div className="mgmt-day-card-date">
+                    <strong>{formatCutoffText(pt.cutoff)}</strong>
+                    <div className="mgmt-day-chips">
+                      {isSelected && <span className="evolution-chip active">Activo</span>}
+                      {isInitial && <span className="evolution-chip initial">Base inicial</span>}
+                      {isLatest && !isSelected && <span className="evolution-chip latest">Hoy</span>}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`mgmt-day-card-balance tone-${
+                      isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
+                    }`}
+                  >
+                    {isInitial ? (
+                      <div className="mgmt-balance-body">
+                        <strong className="mgmt-balance-amount">$ 0</strong>
+                        <small className="mgmt-balance-pct">Línea base</small>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="mgmt-balance-icon down-icon">▼</span>
+                        <div className="mgmt-balance-body">
+                          <strong className="mgmt-balance-amount">
+                            -{formatCurrency(dailyWithdrawn)}
+                          </strong>
+                          <small className="mgmt-balance-pct">
+                            Bajó {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
+                          </small>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="mgmt-day-card-saldo">
-                  <small className="mgmt-day-card-sublabel">Saldo restante</small>
-                  <strong className="mgmt-day-card-money">{formatCurrency(pt.stillOpenPending)}</strong>
-                  <small className="text-muted">{formatNumber(pt.stillOpenCount)} facturas abiertas</small>
-                </div>
+                {/* Métricas clave en rejilla responsiva auto-ajustable */}
+                <div className="mgmt-day-card-metrics">
+                  <div className="mgmt-day-card-metric-cell">
+                    <small className="mgmt-day-card-sublabel">Saldo restante</small>
+                    <strong className="mgmt-day-card-money">{formatCurrency(pt.stillOpenPending)}</strong>
+                    <small className="text-muted">{formatNumber(pt.stillOpenCount)} facturas abiertas</small>
+                  </div>
 
-                <div className="mgmt-day-card-flow out">
-                  <small className="mgmt-day-card-sublabel">⬇ Salieron (Recaudos)</small>
-                  {isInitial ? (
-                    <span className="text-muted" style={{ fontSize: '11px' }}>Base de partida</span>
-                  ) : dailyCount > 0 ? (
-                    <>
-                      <strong className="mgmt-flow-out">-{formatNumber(dailyCount)} facturas</strong>
-                      <small style={{ color: '#15803d', fontSize: '10px', fontWeight: 650 }}>
-                        -{formatCurrency(dailyWithdrawn)}
-                      </small>
-                    </>
-                  ) : (
-                    <span className="text-muted" style={{ fontSize: '11px' }}>
-                      {pt.cutoff === todayStr ? 'Recaudos en proceso de asentar' : '0 salidas'}
-                    </span>
-                  )}
-                </div>
-
-                {!isInitial && (
-                  <div className="mgmt-day-card-flow in" style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #E2E8F0' }}>
-                    <small className="mgmt-day-card-sublabel">⬆ Entraron (Nuevas Facturas)</small>
-                    {(pt.dailyNewCount || 0) > 0 ? (
+                  <div className="mgmt-day-card-metric-cell">
+                    <small className="mgmt-day-card-sublabel">⬇ Salieron (Recaudos)</small>
+                    {isInitial ? (
+                      <span className="text-muted" style={{ fontSize: '11px' }}>Base de partida</span>
+                    ) : dailyCount > 0 ? (
                       <>
-                        <strong style={{ color: '#2563EB', fontSize: '12px' }}>+{formatNumber(pt.dailyNewCount || 0)} facturas</strong>
-                        <small style={{ color: '#1D4ED8', fontSize: '10px', fontWeight: 650 }}>
-                          +{formatCurrency(pt.dailyNewPending || 0)}
+                        <strong className="mgmt-flow-out">-{formatNumber(dailyCount)} facturas</strong>
+                        <small style={{ color: '#15803d', fontSize: '10px', fontWeight: 650 }}>
+                          -{formatCurrency(dailyWithdrawn)}
                         </small>
                       </>
                     ) : (
-                      <span className="text-muted" style={{ fontSize: '11px' }}>Sin emisiones</span>
+                      <span className="text-muted" style={{ fontSize: '11px' }}>
+                        {pt.cutoff === todayStr ? 'Recaudos en proceso de asentar' : '0 salidas'}
+                      </span>
                     )}
                   </div>
-                )}
 
-                <div
-                  className={`mgmt-day-card-balance tone-${
-                    isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
-                  }`}
-                >
-                  {isInitial ? (
-                    <div className="mgmt-balance-body">
-                      <strong className="mgmt-balance-amount">$ 0</strong>
-                      <small className="mgmt-balance-pct">Línea base</small>
+                  {!isInitial && (
+                    <div className="mgmt-day-card-metric-cell">
+                      <small className="mgmt-day-card-sublabel">⬆ Entraron (Nuevas Facturas)</small>
+                      {(pt.dailyNewCount || 0) > 0 ? (
+                        <>
+                          <strong style={{ color: '#2563EB', fontSize: '12px' }}>+{formatNumber(pt.dailyNewCount || 0)} facturas</strong>
+                          <small style={{ color: '#1D4ED8', fontSize: '10px', fontWeight: 650 }}>
+                            +{formatCurrency(pt.dailyNewPending || 0)}
+                          </small>
+                        </>
+                      ) : (
+                        <span className="text-muted" style={{ fontSize: '11px' }}>Sin emisiones</span>
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      <span className="mgmt-balance-icon down-icon">▼</span>
-                      <div className="mgmt-balance-body">
-                        <strong className="mgmt-balance-amount">
-                          -{formatCurrency(dailyWithdrawn)}
-                        </strong>
-                        <small className="mgmt-balance-pct">
-                          Bajó {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
-                        </small>
-                      </div>
-                    </>
                   )}
                 </div>
               </div>
