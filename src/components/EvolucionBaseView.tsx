@@ -87,6 +87,7 @@ export function EvolucionBaseView({
 }: Props) {
   const [selectedCutoff, setSelectedCutoff] = useState<string>(fechaBase);
   const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
+  const [reciboDateCriterion, setReciboDateCriterion] = useState<'fecha_recibo' | 'fecha_recaudo'>('fecha_recibo');
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   // Subfiltro de la tabla de la cohorte
@@ -156,12 +157,14 @@ export function EvolucionBaseView({
     datesSet.add(todayStr); // Mantener el corte de hoy presente en el seguimiento activo
 
     recibosRelevantes.forEach((rc) => {
-      const f = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
+      const f = reciboDateCriterion === 'fecha_recibo'
+        ? (rc.Fecha_Recibo || (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : ''))
+        : (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '');
       if (f && f >= fechaBase) datesSet.add(f);
     });
 
     return Array.from(datesSet).sort();
-  }, [fechaBase, todayStr, recibosRelevantes]);
+  }, [fechaBase, todayStr, recibosRelevantes, reciboDateCriterion]);
 
   // Construcción de la Serie de Desmonte (Idéntico a Remisiones)
   const cohortSeries: CohortPoint[] = useMemo(() => {
@@ -179,7 +182,9 @@ export function EvolucionBaseView({
 
     return cohortDates.map((cutoff) => {
       const dayRecibos = recibosRelevantes.filter((rc) => {
-        const f = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
+        const f = reciboDateCriterion === 'fecha_recibo'
+          ? (rc.Fecha_Recibo || (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : ''))
+          : (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '');
         return f === cutoff;
       });
 
@@ -383,6 +388,48 @@ export function EvolucionBaseView({
           </div>
 
           <div className="mgmt-header-actions-row">
+            {/* Selector de Perspectiva de Recaudos */}
+            <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: 3, borderRadius: 10, gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => setReciboDateCriterion('fecha_recibo')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 7,
+                  border: 'none',
+                  fontSize: 11.5,
+                  fontWeight: 750,
+                  cursor: 'pointer',
+                  backgroundColor: reciboDateCriterion === 'fecha_recibo' ? '#2563EB' : 'transparent',
+                  color: reciboDateCriterion === 'fecha_recibo' ? '#FFFFFF' : '#475569',
+                  boxShadow: reciboDateCriterion === 'fecha_recibo' ? '0 2px 4px rgba(37,99,235,0.25)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Desmonte según el día en que Tesorería elaboró el recibo en SISGerente"
+              >
+                1. Día del Recibo (ERP)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReciboDateCriterion('fecha_recaudo')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 7,
+                  border: 'none',
+                  fontSize: 11.5,
+                  fontWeight: 750,
+                  cursor: 'pointer',
+                  backgroundColor: reciboDateCriterion === 'fecha_recaudo' ? '#16A34A' : 'transparent',
+                  color: reciboDateCriterion === 'fecha_recaudo' ? '#FFFFFF' : '#475569',
+                  boxShadow: reciboDateCriterion === 'fecha_recaudo' ? '0 2px 4px rgba(22,163,74,0.25)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Desmonte según el día en que el dinero entró al banco"
+              >
+                2. Día que Entró el Dinero (Banco)
+              </button>
+            </div>
+
             <div className="mgmt-legend-row">
               <span className="mgmt-legend-item favorable-legend">▼ Saldo bajó ese día (Recaudado)</span>
               <span className="mgmt-legend-item blue-legend">Saldo restante</span>

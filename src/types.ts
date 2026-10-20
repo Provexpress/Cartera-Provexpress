@@ -55,6 +55,7 @@ export interface ReciboCajaRecord {
   Prefijo_ReciboCaja: string;
   Numero_ReciboCaja: number;
   Fecha_Recaudo: string;
+  Fecha_Recibo?: string; // Fecha en que se elaboró / digitó el recibo en SISGerente (Día del Recibo)
   Prefijo_FacturaVenta: string;
   Numero_FacturaVenta: number;
   Fecha_Emision: string;
