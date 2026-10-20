@@ -130,10 +130,30 @@ export function EvolucionBaseView({
     return map;
   }, [recibos]);
 
-  // Fechas únicas para la serie cronológica
+  // Fecha de hoy formateada
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  // Última fecha en que Tesorería registró al menos un recibo de caja
+  const lastReciboDate = useMemo(() => {
+    let latest = '';
+    recibosRelevantes.forEach((rc) => {
+      const f = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
+      if (f > latest) latest = f;
+    });
+    return latest;
+  }, [recibosRelevantes]);
+
+  // Fechas únicas para la serie cronológica (incluye base, días con recaudos y corte de hoy)
   const cohortDates = useMemo(() => {
     const datesSet = new Set<string>();
     datesSet.add(fechaBase);
+    datesSet.add(todayStr); // Mantener el corte de hoy presente en el seguimiento activo
 
     recibosRelevantes.forEach((rc) => {
       const f = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
@@ -141,7 +161,7 @@ export function EvolucionBaseView({
     });
 
     return Array.from(datesSet).sort();
-  }, [fechaBase, recibosRelevantes]);
+  }, [fechaBase, todayStr, recibosRelevantes]);
 
   // Construcción de la Serie de Desmonte (Idéntico a Remisiones)
   const cohortSeries: CohortPoint[] = useMemo(() => {
@@ -303,6 +323,28 @@ export function EvolucionBaseView({
             <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6B21A8' }}>
               Seguimiento exclusivo al desmonte de las <strong>{formatNumber(baseReceivedInvoices.length)} facturas</strong> entregadas para gestión de cobro ({formatCurrency(latestPoint.initialPending)}). No ingresa facturación nueva a esta base.
             </p>
+            {lastReciboDate && lastReciboDate < todayStr && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #d8b4fe',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: '#6b21a8',
+                  fontWeight: 600,
+                  marginTop: 6,
+                }}
+              >
+                <Clock size={13} color="#9333ea" />
+                <span>
+                  Últimos recibos registrados en SISGerente: <strong>{formatCutoffText(lastReciboDate)}</strong> (6 recibos). Días 18, 19 y 20 sin nuevos recibos asentados en el ERP.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -562,10 +604,11 @@ export function EvolucionBaseView({
 
         {/* 1.3 Tarjetas Día a Día (Seguimiento Cronológico) */}
         <div className="mgmt-day-cards-list">
-          {cohortSeries.map((pt, idx, arr) => {
+          {cohortSeries.map((pt) => {
             const isSelected = pt.cutoff === selectedCutoff;
             const isInitial = pt.cutoff === initialPoint.cutoff;
-            const isLatest = idx === arr.length - 1 && arr.length > 1;
+            const isToday = pt.cutoff === todayStr;
+            const isLastReciboDay = pt.cutoff === lastReciboDate && pt.cutoff !== todayStr;
             const dailyWithdrawn = pt.dailyWithdrawnPending || 0;
             const dailyCount = pt.dailyWithdrawnCount || 0;
             const hasDailyWithdrawn = dailyWithdrawn > 0;
@@ -584,9 +627,10 @@ export function EvolucionBaseView({
                 <div className="mgmt-day-card-date">
                   <strong>{formatCutoffText(pt.cutoff)}</strong>
                   <div className="mgmt-day-chips">
-                    {isSelected && <span className="evolution-chip active">Activo</span>}
+                    {isSelected && <span className="evolution-chip active">Seleccionado</span>}
                     {isInitial && <span className="evolution-chip initial">Base inicial</span>}
-                    {isLatest && !isSelected && <span className="evolution-chip latest">Hoy</span>}
+                    {isToday && <span className="evolution-chip latest" style={{ backgroundColor: '#0284c7', color: '#fff' }}>Hoy</span>}
+                    {isLastReciboDay && <span className="evolution-chip" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>Último recaudo</span>}
                   </div>
                 </div>
 
