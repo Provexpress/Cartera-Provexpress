@@ -1,17 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Calendar,
   CalendarDays,
   CalendarRange,
   ChevronDown,
   Clock,
-  Filter,
   Info,
   RefreshCw,
   Sparkles,
   Zap,
 } from 'lucide-react';
-import { formatNumber } from '../lib/carteraApi';
+import { formatNumber, getAvailableMonths, type MonthOption } from '../lib/carteraApi';
 
 export type DatePreset =
   | 'all'
@@ -53,17 +52,35 @@ export function DateControlBar({
   onChangeFechaFinal,
   onRefreshERP,
 }: Props) {
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [todayDropdownOpen, setTodayDropdownOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLDivElement>(null);
 
-  // Cerrar popovers al hacer clic afuera
+  // Lista de meses disponibles para selección directa
+  const monthOptions = useMemo<MonthOption[]>(() => getAvailableMonths(16), []);
+
+  // Detectar si las fechas actuales corresponden exactamente a un mes específico
+  const currentSelectedMonthKey = useMemo(() => {
+    if (!fechaInicial || !fechaFinal) return '';
+    const mInit = fechaInicial.slice(0, 7);
+    const mFinal = fechaFinal.slice(0, 7);
+    if (mInit === mFinal && fechaInicial.endsWith('-01')) {
+      const match = monthOptions.find((m) => m.key === mInit);
+      if (match && match.endDate === fechaFinal) {
+        return mInit;
+      }
+      // O si es el mes en curso y fechaFinal es hoy
+      const now = new Date();
+      const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (mInit === currentKey) {
+        return currentKey;
+      }
+    }
+    return '';
+  }, [fechaInicial, fechaFinal, monthOptions]);
+
+  // Cerrar dropdown de Hoy al hacer clic afuera
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setCalendarOpen(false);
-      }
       if (todayRef.current && !todayRef.current.contains(event.target as Node)) {
         setTodayDropdownOpen(false);
       }
@@ -89,16 +106,21 @@ export function DateControlBar({
     }
   };
 
-  const getMonthName = (offset = 0) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + offset);
-    return d.toLocaleDateString('es-CO', { month: 'long' });
+  // Manejo de selección de mes desde el dropdown
+  const handleMonthSelect = (monthKey: string) => {
+    if (!monthKey) return;
+    const option = monthOptions.find((m) => m.key === monthKey);
+    if (option) {
+      onChangeFechaInicial(option.startDate);
+      onChangeFechaFinal(option.endDate);
+      onSelectPreset('custom');
+    }
   };
 
   // Texto descriptivo del filtro activo
   const getFilterDescription = () => {
     if (datePreset === 'all') {
-      return `Toda la Cartera Activa (${formatNumber(filteredCount)} facturas vivas)`;
+      return `Toda la Cartera Activa (${formatNumber(filteredCount)} facturas vivas sin límite de fechas)`;
     }
     if (datePreset === 'today') {
       return `Corte al Día de Hoy · Evaluando mora a la fecha actual (${formatNumber(filteredCount)} facturas)`;
@@ -109,12 +131,14 @@ export function DateControlBar({
     if (datePreset === 'today_emision') {
       return `Facturas emitidas hoy ${formatPrettyDate(fechaFinal)} (${formatNumber(filteredCount)} facturas)`;
     }
-    if (datePreset === 'current_month') {
-      return `Mes en Curso (${getMonthName(0)}) · ${formatPrettyDate(fechaInicial)} al ${formatPrettyDate(fechaFinal)} (${formatNumber(filteredCount)} facturas)`;
+
+    // Si coincide con un mes seleccionado
+    if (currentSelectedMonthKey) {
+      const monthObj = monthOptions.find((m) => m.key === currentSelectedMonthKey);
+      const name = monthObj ? monthObj.label : currentSelectedMonthKey;
+      return `Mes de ${name} · ${formatPrettyDate(fechaInicial)} al ${formatPrettyDate(fechaFinal)} (${formatNumber(filteredCount)} facturas)`;
     }
-    if (datePreset === 'last_month') {
-      return `Mes Anterior (${getMonthName(-1)}) · ${formatPrettyDate(fechaInicial)} al ${formatPrettyDate(fechaFinal)} (${formatNumber(filteredCount)} facturas)`;
-    }
+
     return `Rango Personalizado · Del ${formatPrettyDate(fechaInicial)} al ${formatPrettyDate(fechaFinal)} (${formatNumber(filteredCount)} facturas)`;
   };
 
@@ -135,7 +159,7 @@ export function DateControlBar({
         marginBottom: 16,
       }}
     >
-      {/* FILA 1: PRESETS Y CALENDARIO */}
+      {/* FILA 1: PRESETS PRINCIPALES, SELECTOR DE MES Y RANGO DIRECTO */}
       <div
         style={{
           display: 'flex',
@@ -145,7 +169,7 @@ export function DateControlBar({
           gap: 12,
         }}
       >
-        {/* LADO IZQUIERDO: PRESETS DE PERÍODO CON HOY MEJORADO */}
+        {/* LADO IZQUIERDO: PRESETS ESENCIALES (TODA LA CARTERA, HOY Y SELECTOR DE MES) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span
             style={{
@@ -160,11 +184,11 @@ export function DateControlBar({
             }}
           >
             <Calendar size={14} color="#0284c7" />
-            <span>Período:</span>
+            <span>Filtros:</span>
           </span>
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Toda la Cartera */}
+            {/* 1. TODA LA CARTERA */}
             <button
               type="button"
               className={`preset-chip ${datePreset === 'all' ? 'active' : ''}`}
@@ -174,7 +198,7 @@ export function DateControlBar({
               Toda la Cartera ({totalRecordsCount})
             </button>
 
-            {/* BOTÓN "HOY" CON DROPDOWN DE ORIENTACIÓN */}
+            {/* 2. BOTÓN "HOY" CON MENÚ ORIENTADO */}
             <div style={{ position: 'relative' }} ref={todayRef}>
               <div
                 style={{
@@ -194,6 +218,7 @@ export function DateControlBar({
                     datePreset === 'today' || datePreset === 'today_vence' || datePreset === 'today_emision'
                       ? '0 2px 8px rgba(2, 132, 199, 0.35)'
                       : 'none',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <button
@@ -358,229 +383,122 @@ export function DateControlBar({
               )}
             </div>
 
-            {/* Mes Actual */}
-            <button
-              type="button"
-              className={`preset-chip ${datePreset === 'current_month' ? 'active' : ''}`}
-              onClick={() => onSelectPreset('current_month')}
-              title={`Facturas del mes en curso (${getMonthName(0)})`}
-            >
-              Mes Actual
-            </button>
-
-            {/* Mes Anterior */}
-            <button
-              type="button"
-              className={`preset-chip ${datePreset === 'last_month' ? 'active' : ''}`}
-              onClick={() => onSelectPreset('last_month')}
-              title={`Facturas del mes anterior completo (${getMonthName(-1)})`}
-            >
-              Mes Anterior
-            </button>
-
-            {/* BOTÓN CALENDARIO INTERACTIVO */}
-            <div style={{ position: 'relative' }} ref={popoverRef}>
-              <button
-                type="button"
-                className={`preset-chip ${datePreset === 'custom' || calendarOpen ? 'active' : ''}`}
-                onClick={() => setCalendarOpen(!calendarOpen)}
+            {/* 3. SELECTOR DE MES (DROPDOWN DIRECTO DE MESES) */}
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <CalendarDays
+                size={13}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontWeight: 700,
+                  position: 'absolute',
+                  left: 10,
+                  pointerEvents: 'none',
+                  color: currentSelectedMonthKey ? '#0284c7' : '#64748b',
                 }}
-                title="Abrir selector de fechas y calendario"
+              />
+              <select
+                value={currentSelectedMonthKey}
+                onChange={(e) => handleMonthSelect(e.target.value)}
+                style={{
+                  padding: '6px 28px 6px 28px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  borderRadius: 20,
+                  border: currentSelectedMonthKey ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                  backgroundColor: currentSelectedMonthKey ? '#f0f9ff' : '#ffffff',
+                  color: currentSelectedMonthKey ? '#0284c7' : '#334155',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  boxShadow: currentSelectedMonthKey ? '0 1px 4px rgba(2, 132, 199, 0.2)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Seleccionar un mes específico para consultar"
               >
-                <CalendarRange size={13} />
-                <span>
-                  {datePreset === 'custom'
-                    ? `${formatPrettyDate(fechaInicial)} — ${formatPrettyDate(fechaFinal)}`
-                    : 'Calendario'}
-                </span>
-                <ChevronDown size={12} />
-              </button>
-
-              {/* POPOVER DEL CALENDARIO */}
-              {calendarOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    left: 0,
-                    zIndex: 1100,
-                    backgroundColor: '#ffffff',
-                    borderRadius: 16,
-                    border: '1px solid #cbd5e1',
-                    boxShadow: '0 16px 36px -8px rgba(0,0,0,0.18)',
-                    padding: '18px 20px',
-                    width: 380,
-                    maxWidth: '92vw',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 16,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <CalendarDays size={18} color="#0284c7" />
-                      <strong style={{ fontSize: 14, color: '#0f172a' }}>Selector de Fechas y Rango</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="icon-btn-minimal"
-                      onClick={() => setCalendarOpen(false)}
-                      style={{ width: 26, height: 26 }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {/* Accesos Rápidos dentro del Calendario */}
-                  <div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                      Atajos rápidos:
-                    </span>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 6 }}>
-                      <button
-                        type="button"
-                        className="button button-xs button-secondary"
-                        onClick={() => {
-                          onSelectPreset('today');
-                          setCalendarOpen(false);
-                        }}
-                      >
-                        ⚡ Hoy (Corte Cartera)
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-xs button-secondary"
-                        onClick={() => {
-                          onSelectPreset('current_month');
-                          setCalendarOpen(false);
-                        }}
-                      >
-                        📆 Mes en Curso
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-xs button-secondary"
-                        onClick={() => {
-                          onSelectPreset('last_month');
-                          setCalendarOpen(false);
-                        }}
-                      >
-                        🗓️ Mes Anterior
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-xs button-secondary"
-                        onClick={() => {
-                          onSelectPreset('all');
-                          setCalendarOpen(false);
-                        }}
-                      >
-                        📊 Toda la Cartera
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Inputs de Rango */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
-                        Fecha Inicial (Desde):
-                      </label>
-                      <input
-                        type="date"
-                        className="date-input-field"
-                        value={fechaInicial}
-                        onChange={(e) => {
-                          onChangeFechaInicial(e.target.value);
-                          onSelectPreset('custom');
-                        }}
-                        style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 8, border: '1px solid #cbd5e1' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
-                        Fecha Final (Hasta):
-                      </label>
-                      <input
-                        type="date"
-                        className="date-input-field"
-                        value={fechaFinal}
-                        onChange={(e) => {
-                          onChangeFechaFinal(e.target.value);
-                          onSelectPreset('custom');
-                        }}
-                        style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 8, border: '1px solid #cbd5e1' }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Criterio dentro del popover */}
-                  <div style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                      Evaluar fechas por:
-                    </span>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectCriterion('vencimiento')}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          border: 'none',
-                          cursor: 'pointer',
-                          backgroundColor: dateCriterion === 'vencimiento' ? '#0284c7' : '#ffffff',
-                          color: dateCriterion === 'vencimiento' ? '#ffffff' : '#475569',
-                          boxShadow: dateCriterion === 'vencimiento' ? '0 2px 4px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        Vencimiento
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSelectCriterion('emision')}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          border: 'none',
-                          cursor: 'pointer',
-                          backgroundColor: dateCriterion === 'emision' ? '#0284c7' : '#ffffff',
-                          color: dateCriterion === 'emision' ? '#ffffff' : '#475569',
-                          boxShadow: dateCriterion === 'emision' ? '0 2px 4px rgba(0,0,0,0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        Emisión
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="button button-sm button-primary"
-                    onClick={() => setCalendarOpen(false)}
-                    style={{ width: '100%', justifyContent: 'center' }}
-                  >
-                    Listo · Aplicar Rango
-                  </button>
-                </div>
-              )}
+                <option value="">🗓️ Escoger Mes...</option>
+                {monthOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={12}
+                style={{
+                  position: 'absolute',
+                  right: 9,
+                  pointerEvents: 'none',
+                  color: currentSelectedMonthKey ? '#0284c7' : '#64748b',
+                }}
+              />
             </div>
           </div>
         </div>
 
-        {/* LADO DERECHO: SELECTOR DE CRITERIO + INPUTS RÁPIDOS + BOTÓN ACTUALIZAR ERP */}
+        {/* LADO DERECHO: RANGO DE FECHAS (DE TAL A TAL) + CRITERIO + BOTÓN ACTUALIZAR ERP */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* Criterio Segmentado */}
+          {/* 4. RANGO DE FECHAS DIRECTO (DE TAL A TAL) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: datePreset === 'custom' && !currentSelectedMonthKey ? '#eff6ff' : '#f8fafc',
+              border: datePreset === 'custom' && !currentSelectedMonthKey ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+              padding: '3px 8px',
+              borderRadius: 10,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <CalendarRange size={13} color="#0284c7" />
+            <span style={{ fontSize: 11, fontWeight: 750, color: '#475569', textTransform: 'uppercase' }}>
+              Rango:
+            </span>
+            <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Desde</span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaInicial}
+              onChange={(e) => {
+                onChangeFechaInicial(e.target.value);
+                onSelectPreset('custom');
+              }}
+              style={{
+                padding: '4px 7px',
+                fontSize: 12,
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                fontWeight: 600,
+                color: '#0f172a',
+                cursor: 'pointer',
+              }}
+              title="Fecha Inicial (Desde)"
+            />
+            <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Hasta</span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaFinal}
+              onChange={(e) => {
+                onChangeFechaFinal(e.target.value);
+                onSelectPreset('custom');
+              }}
+              style={{
+                padding: '4px 7px',
+                fontSize: 12,
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                fontWeight: 600,
+                color: '#0f172a',
+                cursor: 'pointer',
+              }}
+              title="Fecha Final (Hasta)"
+            />
+          </div>
+
+          {/* 5. CRITERIO SEGMENTADO (VENCIMIENTO VS EMISIÓN) */}
           <div
             style={{
               display: 'flex',
@@ -612,34 +530,7 @@ export function DateControlBar({
             </button>
           </div>
 
-          {/* Fechas visibles directas */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <input
-              type="date"
-              className="date-input-field"
-              value={fechaInicial}
-              onChange={(e) => {
-                onChangeFechaInicial(e.target.value);
-                onSelectPreset('custom');
-              }}
-              style={{ padding: '4px 8px', fontSize: 12, borderRadius: 8, border: '1px solid #cbd5e1' }}
-              title="Fecha Inicial"
-            />
-            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>a</span>
-            <input
-              type="date"
-              className="date-input-field"
-              value={fechaFinal}
-              onChange={(e) => {
-                onChangeFechaFinal(e.target.value);
-                onSelectPreset('custom');
-              }}
-              style={{ padding: '4px 8px', fontSize: 12, borderRadius: 8, border: '1px solid #cbd5e1' }}
-              title="Fecha Final"
-            />
-          </div>
-
-          {/* Actualizar ERP */}
+          {/* 6. BOTÓN ACTUALIZAR ERP */}
           <button
             type="button"
             className="button button-sm button-secondary"

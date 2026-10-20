@@ -5,6 +5,9 @@ import {
   Building2,
   Download,
   Calendar,
+  CalendarDays,
+  CalendarRange,
+  ChevronDown,
   Layers,
   Sparkles,
   ChevronLeft,
@@ -16,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import type { ReciboCajaRecord } from '../types';
-import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
+import { formatCurrency, formatNumber, formatPercent, getAvailableMonths, type MonthOption } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 import { GestoresCobranzaWidget } from './GestoresCobranzaWidget';
 import { getGestorCobranza, type GestorCobranzaId } from '../lib/gestoresCobranza';
@@ -25,13 +28,24 @@ interface Props {
   recibos: ReciboCajaRecord[];
 }
 
-type DatePreset = 'current_month' | 'today' | 'last_month' | 'all';
+type DatePreset = 'all' | 'today' | 'custom';
 export type DateViewMode = 'fecha_recibo' | 'fecha_recaudo';
 
 export function RecibosCajaView({ recibos }: Props) {
   // Perspectiva de fecha: 'fecha_recibo' (Día del Recibo en ERP) vs 'fecha_recaudo' (Día que entró el dinero al banco)
   const [dateViewMode, setDateViewMode] = useState<DateViewMode>('fecha_recibo');
-  const [datePreset, setDatePreset] = useState<DatePreset>('current_month');
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  const monthOptions = useMemo<MonthOption[]>(() => getAvailableMonths(16), []);
+  const [fechaInicial, setFechaInicial] = useState<string>(`${y}-${m}-01`);
+  const [fechaFinal, setFechaFinal] = useState<string>(todayStr);
+
   const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
   const [selectedGestor, setSelectedGestor] = useState<'Todos' | GestorCobranzaId>('Todos');
   const [selectedAsesorCobranza, setSelectedAsesorCobranza] = useState<string | null>(null);
@@ -39,6 +53,20 @@ export function RecibosCajaView({ recibos }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const pageSize = 25;
+
+  // Detectar si las fechas actuales corresponden exactamente a un mes específico
+  const currentSelectedMonthKey = useMemo(() => {
+    if (datePreset !== 'custom' || !fechaInicial || !fechaFinal) return '';
+    const mInit = fechaInicial.slice(0, 7);
+    const mFinal = fechaFinal.slice(0, 7);
+    if (mInit === mFinal && fechaInicial.endsWith('-01')) {
+      const match = monthOptions.find((opt) => opt.key === mInit);
+      if (match && match.endDate === fechaFinal) return mInit;
+      const curKey = `${y}-${m}`;
+      if (mInit === curKey) return curKey;
+    }
+    return '';
+  }, [datePreset, fechaInicial, fechaFinal, monthOptions, y, m]);
 
   const getReceiptDate = (r: ReciboCajaRecord, mode: DateViewMode) => {
     if (mode === 'fecha_recibo') {
@@ -51,12 +79,6 @@ export function RecibosCajaView({ recibos }: Props) {
   const dateFilteredRecibos = useMemo(() => {
     if (datePreset === 'all') return recibos;
 
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-
     if (datePreset === 'today') {
       return recibos.filter((r) => {
         const dt = getReceiptDate(r, dateViewMode);
@@ -64,67 +86,32 @@ export function RecibosCajaView({ recibos }: Props) {
       });
     }
 
-    if (datePreset === 'current_month') {
-      const startCurrentMonth = `${y}-${m}-01`;
+    if (datePreset === 'custom') {
       return recibos.filter((r) => {
         const dt = getReceiptDate(r, dateViewMode);
-        return dt >= startCurrentMonth && dt <= todayStr;
-      });
-    }
-
-    if (datePreset === 'last_month') {
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lmYear = lastMonthDate.getFullYear();
-      const lmM = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
-      const lmLastD = String(lastMonthLastDay.getDate()).padStart(2, '0');
-      const startLm = `${lmYear}-${lmM}-01`;
-      const endLm = `${lmYear}-${lmM}-${lmLastD}`;
-
-      return recibos.filter((r) => {
-        const dt = getReceiptDate(r, dateViewMode);
-        return dt >= startLm && dt <= endLm;
+        if (!dt) return false;
+        if (fechaInicial && dt < fechaInicial) return false;
+        if (fechaFinal && dt > fechaFinal) return false;
+        return true;
       });
     }
 
     return recibos;
-  }, [recibos, datePreset, dateViewMode]);
+  }, [recibos, datePreset, dateViewMode, fechaInicial, fechaFinal, todayStr]);
 
   // 2. Conteo rápido para insignias de botones
   const presetCounts = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-    const startCurrentMonth = `${y}-${m}-01`;
-
-    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-    const lmYear = lastMonthDate.getFullYear();
-    const lmM = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
-    const lmLastD = String(lastMonthLastDay.getDate()).padStart(2, '0');
-    const startLm = `${lmYear}-${lmM}-01`;
-    const endLm = `${lmYear}-${lmM}-${lmLastD}`;
-
     let todayCount = 0;
-    let currentMonthCount = 0;
-    let lastMonthCount = 0;
-
     recibos.forEach((r) => {
       const dt = getReceiptDate(r, dateViewMode);
       if (dt === todayStr) todayCount++;
-      if (dt >= startCurrentMonth && dt <= todayStr) currentMonthCount++;
-      if (dt >= startLm && dt <= endLm) lastMonthCount++;
     });
 
     return {
       all: recibos.length,
       today: todayCount,
-      current_month: currentMonthCount,
-      last_month: lastMonthCount,
     };
-  }, [recibos, dateViewMode]);
+  }, [recibos, dateViewMode, todayStr]);
 
   // 3. Filtrado por Director Comercial, Gestor de Cobranza, Asesor y Buscador
   const filtered = useMemo(() => {
@@ -252,7 +239,16 @@ export function RecibosCajaView({ recibos }: Props) {
     try {
       setIsExportingExcel(true);
       const { generateRecibosCajaExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
-      const { buffer, filename } = await generateRecibosCajaExcel(filtered, breakdownByDirector, datePreset);
+      const presetLabel =
+        datePreset === 'all'
+          ? 'Toda la Cartera'
+          : datePreset === 'today'
+          ? 'Hoy'
+          : currentSelectedMonthKey
+          ? (monthOptions.find((m) => m.key === currentSelectedMonthKey)?.label || currentSelectedMonthKey)
+          : `${fechaInicial} a ${fechaFinal}`;
+
+      const { buffer, filename } = await generateRecibosCajaExcel(filtered, breakdownByDirector, presetLabel);
       downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error al generar Excel de Recibos:', err);
@@ -431,13 +427,14 @@ export function RecibosCajaView({ recibos }: Props) {
         </div>
       </div>
 
-      {/* ─── 2. BARRA DE PRESETS DE FECHAS (IDENTICA A POSTMAN / ERP) ─── */}
+      {/* ─── 2. BARRA DE PRESETS DE FECHAS (TODA, HOY, MES Y RANGO DE TAL A TAL) ─── */}
       <div
         style={{
           display: 'flex',
-          gap: 10,
+          gap: 12,
           flexWrap: 'wrap',
           alignItems: 'center',
+          justifyContent: 'space-between',
           backgroundColor: '#FFFFFF',
           padding: '12px 18px',
           borderRadius: 14,
@@ -445,151 +442,214 @@ export function RecibosCajaView({ recibos }: Props) {
           boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 750, color: '#334155', marginRight: 4 }}>
-          Período de Consulta:
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 750, color: '#334155', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Calendar size={14} color="#16A34A" />
+            Período:
+          </span>
 
-        <button
-          type="button"
-          onClick={() => {
-            setDatePreset('current_month');
-            setCurrentPage(1);
-          }}
+          {/* 1. TODOS LOS RECAUDOS */}
+          <button
+            type="button"
+            onClick={() => {
+              setDatePreset('all');
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              borderRadius: 8,
+              border: datePreset === 'all' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
+              backgroundColor: datePreset === 'all' ? '#F0FDF4' : '#FFFFFF',
+              color: datePreset === 'all' ? '#15803D' : '#475569',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'all 0.15s ease',
+            }}
+            title="Todos los recaudos registrados sin restricción de fechas"
+          >
+            Todos los Recaudos
+            <span
+              style={{
+                backgroundColor: datePreset === 'all' ? '#16A34A' : '#E2E8F0',
+                color: datePreset === 'all' ? '#FFFFFF' : '#475569',
+                fontSize: 10.5,
+                padding: '1px 6px',
+                borderRadius: 10,
+                fontWeight: 800,
+              }}
+            >
+              {formatNumber(presetCounts.all)}
+            </span>
+          </button>
+
+          {/* 2. HOY */}
+          <button
+            type="button"
+            onClick={() => {
+              setDatePreset('today');
+              setFechaInicial(todayStr);
+              setFechaFinal(todayStr);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              borderRadius: 8,
+              border: datePreset === 'today' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
+              backgroundColor: datePreset === 'today' ? '#F0FDF4' : '#FFFFFF',
+              color: datePreset === 'today' ? '#15803D' : '#475569',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'all 0.15s ease',
+            }}
+            title="Recaudos aplicados en el día de hoy"
+          >
+            <Clock size={13} />
+            Hoy
+            <span
+              style={{
+                backgroundColor: datePreset === 'today' ? '#16A34A' : '#E2E8F0',
+                color: datePreset === 'today' ? '#FFFFFF' : '#475569',
+                fontSize: 10.5,
+                padding: '1px 6px',
+                borderRadius: 10,
+                fontWeight: 800,
+              }}
+            >
+              {presetCounts.today}
+            </span>
+          </button>
+
+          {/* 3. SELECTOR DE MES */}
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <CalendarDays
+              size={13}
+              style={{
+                position: 'absolute',
+                left: 10,
+                pointerEvents: 'none',
+                color: currentSelectedMonthKey ? '#16A34A' : '#64748B',
+              }}
+            />
+            <select
+              value={currentSelectedMonthKey}
+              onChange={(e) => {
+                const key = e.target.value;
+                if (!key) return;
+                const opt = monthOptions.find((m) => m.key === key);
+                if (opt) {
+                  setFechaInicial(opt.startDate);
+                  setFechaFinal(opt.endDate);
+                  setDatePreset('custom');
+                  setCurrentPage(1);
+                }
+              }}
+              style={{
+                padding: '6px 28px 6px 28px',
+                fontSize: 12,
+                fontWeight: 700,
+                borderRadius: 8,
+                border: currentSelectedMonthKey ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
+                backgroundColor: currentSelectedMonthKey ? '#F0FDF4' : '#FFFFFF',
+                color: currentSelectedMonthKey ? '#15803D' : '#334155',
+                cursor: 'pointer',
+                outline: 'none',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                boxShadow: currentSelectedMonthKey ? '0 1px 4px rgba(22, 163, 74, 0.2)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+              title="Seleccionar un mes específico para consultar los recaudos"
+            >
+              <option value="">🗓️ Escoger Mes...</option>
+              {monthOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={12}
+              style={{
+                position: 'absolute',
+                right: 9,
+                pointerEvents: 'none',
+                color: currentSelectedMonthKey ? '#16A34A' : '#64748B',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 4. RANGO DE FECHAS DIRECTO (DE TAL A TAL) */}
+        <div
           style={{
-            padding: '7px 15px',
-            fontSize: 12.5,
-            fontWeight: 700,
-            borderRadius: 8,
-            border: datePreset === 'current_month' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
-            backgroundColor: datePreset === 'current_month' ? '#F0FDF4' : '#FFFFFF',
-            color: datePreset === 'current_month' ? '#15803D' : '#475569',
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
+            backgroundColor: datePreset === 'custom' && !currentSelectedMonthKey ? '#F0FDF4' : '#F8FAFC',
+            border: datePreset === 'custom' && !currentSelectedMonthKey ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
+            padding: '4px 10px',
+            borderRadius: 10,
+            transition: 'all 0.15s ease',
           }}
         >
-          <Calendar size={13} />
-          Mes Actual
-          <span
-            style={{
-              backgroundColor: datePreset === 'current_month' ? '#16A34A' : '#E2E8F0',
-              color: datePreset === 'current_month' ? '#FFFFFF' : '#475569',
-              fontSize: 10.5,
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontWeight: 800,
-            }}
-          >
-            {formatNumber(presetCounts.current_month)}
+          <CalendarRange size={13} color="#16A34A" />
+          <span style={{ fontSize: 11, fontWeight: 750, color: '#475569', textTransform: 'uppercase' }}>
+            Rango:
           </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setDatePreset('today');
-            setCurrentPage(1);
-          }}
-          style={{
-            padding: '7px 15px',
-            fontSize: 12.5,
-            fontWeight: 700,
-            borderRadius: 8,
-            border: datePreset === 'today' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
-            backgroundColor: datePreset === 'today' ? '#F0FDF4' : '#FFFFFF',
-            color: datePreset === 'today' ? '#15803D' : '#475569',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <Clock size={13} />
-          Hoy
-          <span
-            style={{
-              backgroundColor: datePreset === 'today' ? '#16A34A' : '#E2E8F0',
-              color: datePreset === 'today' ? '#FFFFFF' : '#475569',
-              fontSize: 10.5,
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontWeight: 800,
+          <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>Desde</span>
+          <input
+            type="date"
+            className="date-input-field"
+            value={fechaInicial}
+            onChange={(e) => {
+              setFechaInicial(e.target.value);
+              setDatePreset('custom');
+              setCurrentPage(1);
             }}
-          >
-            {presetCounts.today}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setDatePreset('last_month');
-            setCurrentPage(1);
-          }}
-          style={{
-            padding: '7px 15px',
-            fontSize: 12.5,
-            fontWeight: 700,
-            borderRadius: 8,
-            border: datePreset === 'last_month' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
-            backgroundColor: datePreset === 'last_month' ? '#F0FDF4' : '#FFFFFF',
-            color: datePreset === 'last_month' ? '#15803D' : '#475569',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          Mes Anterior (Septiembre)
-          <span
             style={{
-              backgroundColor: datePreset === 'last_month' ? '#16A34A' : '#E2E8F0',
-              color: datePreset === 'last_month' ? '#FFFFFF' : '#475569',
-              fontSize: 10.5,
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontWeight: 800,
+              padding: '4px 7px',
+              fontSize: 12,
+              borderRadius: 6,
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              fontWeight: 600,
+              color: '#0F172A',
+              cursor: 'pointer',
             }}
-          >
-            {formatNumber(presetCounts.last_month)}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setDatePreset('all');
-            setCurrentPage(1);
-          }}
-          style={{
-            padding: '7px 15px',
-            fontSize: 12.5,
-            fontWeight: 700,
-            borderRadius: 8,
-            border: datePreset === 'all' ? '1.5px solid #16A34A' : '1px solid #E2E8F0',
-            backgroundColor: datePreset === 'all' ? '#F0FDF4' : '#FFFFFF',
-            color: datePreset === 'all' ? '#15803D' : '#475569',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          Todos los Recaudos
-          <span
+            title="Fecha Inicial (Desde)"
+          />
+          <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>Hasta</span>
+          <input
+            type="date"
+            className="date-input-field"
+            value={fechaFinal}
+            onChange={(e) => {
+              setFechaFinal(e.target.value);
+              setDatePreset('custom');
+              setCurrentPage(1);
+            }}
             style={{
-              backgroundColor: datePreset === 'all' ? '#16A34A' : '#E2E8F0',
-              color: datePreset === 'all' ? '#FFFFFF' : '#475569',
-              fontSize: 10.5,
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontWeight: 800,
+              padding: '4px 7px',
+              fontSize: 12,
+              borderRadius: 6,
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              fontWeight: 600,
+              color: '#0F172A',
+              cursor: 'pointer',
             }}
-          >
-            {formatNumber(presetCounts.all)}
-          </span>
-        </button>
+            title="Fecha Final (Hasta)"
+          />
+        </div>
       </div>
 
       {/* Nota informativa en caso de seleccionar 'Hoy' */}
@@ -613,7 +673,7 @@ export function RecibosCajaView({ recibos }: Props) {
             <strong>Situación del día de hoy en ERP Siesa:</strong> {latestReciboInfo ? (
               <>El último consecutivo de recibo de caja asentado en la vista contable es el <strong>RC-{latestReciboInfo.numero}</strong> al corte del {latestReciboInfo.fechaCorte}. </>
             ) : null}
-            Los recibos emitidos hoy en la operación se encuentran en lote provisional/borrador en tesorería y se sincronizarán al realizarse el cierre del día. Para ver los <strong>{formatNumber(presetCounts.current_month)} recibos de este mes</strong>, selecciona la pestaña <strong>«Mes Actual»</strong>.
+            Los recibos emitidos hoy en la operación se encuentran en lote provisional/borrador en tesorería y se sincronizarán al realizarse el cierre del día. Para ver los recaudos del período, selecciona un mes en el selector de meses o haz clic en <strong>«Todos los Recaudos»</strong>.
           </div>
         </div>
       )}

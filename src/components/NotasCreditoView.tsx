@@ -10,36 +10,59 @@ import {
   ChevronRight,
   TrendingDown,
   Calendar,
+  CalendarDays,
+  CalendarRange,
+  ChevronDown,
+  Clock,
   Sparkles,
 } from 'lucide-react';
 import type { NotaCreditoRecord } from '../types';
-import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
+import { formatCurrency, formatNumber, formatPercent, getAvailableMonths, type MonthOption } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 
 interface Props {
   notas: NotaCreditoRecord[];
 }
 
-type DatePreset = 'all' | 'today' | 'current_month' | 'last_month';
+type DatePreset = 'all' | 'today' | 'custom';
 
 export function NotasCreditoView({ notas }: Props) {
   // Filtros interactivos del Dashboard
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  const monthOptions = useMemo<MonthOption[]>(() => getAvailableMonths(16), []);
+  const [fechaInicial, setFechaInicial] = useState<string>(`${y}-${m}-01`);
+  const [fechaFinal, setFechaFinal] = useState<string>(todayStr);
+
   const [selectedDirector, setSelectedDirector] = useState<string>('Todos');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const pageSize = 25;
 
+  // Detectar si las fechas actuales corresponden exactamente a un mes específico
+  const currentSelectedMonthKey = useMemo(() => {
+    if (datePreset !== 'custom' || !fechaInicial || !fechaFinal) return '';
+    const mInit = fechaInicial.slice(0, 7);
+    const mFinal = fechaFinal.slice(0, 7);
+    if (mInit === mFinal && fechaInicial.endsWith('-01')) {
+      const match = monthOptions.find((opt) => opt.key === mInit);
+      if (match && match.endDate === fechaFinal) return mInit;
+      const curKey = `${y}-${m}`;
+      if (mInit === curKey) return curKey;
+    }
+    return '';
+  }, [datePreset, fechaInicial, fechaFinal, monthOptions, y, m]);
+
   // 1. Filtrado por período de fecha
   const dateFilteredNotas = useMemo(() => {
     if (datePreset === 'all') return notas;
-
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
 
     if (datePreset === 'today') {
       return notas.filter((n) => {
@@ -48,31 +71,18 @@ export function NotasCreditoView({ notas }: Props) {
       });
     }
 
-    if (datePreset === 'current_month') {
-      const startCurrentMonth = `${y}-${m}-01`;
+    if (datePreset === 'custom') {
       return notas.filter((n) => {
         const em = n.Fecha_Emision ? n.Fecha_Emision.split('T')[0] : '';
-        return em >= startCurrentMonth && em <= todayStr;
-      });
-    }
-
-    if (datePreset === 'last_month') {
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lmYear = lastMonthDate.getFullYear();
-      const lmM = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
-      const lmLastD = String(lastMonthLastDay.getDate()).padStart(2, '0');
-      const startLm = `${lmYear}-${lmM}-01`;
-      const endLm = `${lmYear}-${lmM}-${lmLastD}`;
-
-      return notas.filter((n) => {
-        const em = n.Fecha_Emision ? n.Fecha_Emision.split('T')[0] : '';
-        return em >= startLm && em <= endLm;
+        if (!em) return false;
+        if (fechaInicial && em < fechaInicial) return false;
+        if (fechaFinal && em > fechaFinal) return false;
+        return true;
       });
     }
 
     return notas;
-  }, [notas, datePreset]);
+  }, [notas, datePreset, fechaInicial, fechaFinal, todayStr]);
 
   // 2. Lista de directores únicos para el select
   const directorsList = useMemo(() => {
@@ -157,7 +167,16 @@ export function NotasCreditoView({ notas }: Props) {
     try {
       setIsExportingExcel(true);
       const { generateNotasCreditoExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
-      const { buffer, filename } = await generateNotasCreditoExcel(filtered, datePreset);
+      const presetLabel =
+        datePreset === 'all'
+          ? 'Todas las Notas'
+          : datePreset === 'today'
+          ? 'Hoy'
+          : currentSelectedMonthKey
+          ? (monthOptions.find((m) => m.key === currentSelectedMonthKey)?.label || currentSelectedMonthKey)
+          : `${fechaInicial} a ${fechaFinal}`;
+
+      const { buffer, filename } = await generateNotasCreditoExcel(filtered, presetLabel);
       downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error exportando notas crédito a Excel:', err);
@@ -500,8 +519,14 @@ export function NotasCreditoView({ notas }: Props) {
           boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
         }}
       >
-        {/* Presets de Período */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {/* Presets de Período (Todas, Hoy, Selector de Mes y Rango de tal a tal) */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12.5, fontWeight: 750, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Calendar size={14} color="#7E22CE" />
+            Período:
+          </span>
+
+          {/* 1. TODAS LAS NOTAS */}
           <button
             type="button"
             onClick={() => {
@@ -509,82 +534,172 @@ export function NotasCreditoView({ notas }: Props) {
               setCurrentPage(1);
             }}
             style={{
-              padding: '7px 14px',
-              fontSize: 12.5,
+              padding: '6px 14px',
+              fontSize: 12,
               fontWeight: 700,
               borderRadius: 8,
-              border: 'none',
+              border: datePreset === 'all' ? '1.5px solid #7E22CE' : '1px solid #E2E8F0',
               cursor: 'pointer',
-              backgroundColor: datePreset === 'all' ? '#7E22CE' : '#F1F5F9',
-              color: datePreset === 'all' ? '#FFFFFF' : '#475569',
+              backgroundColor: datePreset === 'all' ? '#FAF5FF' : '#FFFFFF',
+              color: datePreset === 'all' ? '#7E22CE' : '#475569',
               transition: 'all 0.15s ease',
             }}
+            title="Todas las notas crédito registradas sin límite de fechas"
           >
             Todas las Notas ({notas.length})
           </button>
 
+          {/* 2. HOY */}
           <button
             type="button"
             onClick={() => {
               setDatePreset('today');
+              setFechaInicial(todayStr);
+              setFechaFinal(todayStr);
               setCurrentPage(1);
             }}
             style={{
-              padding: '7px 14px',
-              fontSize: 12.5,
+              padding: '6px 14px',
+              fontSize: 12,
               fontWeight: 700,
               borderRadius: 8,
-              border: 'none',
+              border: datePreset === 'today' ? '1.5px solid #7E22CE' : '1px solid #E2E8F0',
               cursor: 'pointer',
-              backgroundColor: datePreset === 'today' ? '#7E22CE' : '#F1F5F9',
-              color: datePreset === 'today' ? '#FFFFFF' : '#475569',
+              backgroundColor: datePreset === 'today' ? '#FAF5FF' : '#FFFFFF',
+              color: datePreset === 'today' ? '#7E22CE' : '#475569',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
               transition: 'all 0.15s ease',
             }}
+            title="Notas crédito emitidas hoy"
           >
+            <Clock size={13} />
             Hoy
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setDatePreset('current_month');
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: '7px 14px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              borderRadius: 8,
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: datePreset === 'current_month' ? '#7E22CE' : '#F1F5F9',
-              color: datePreset === 'current_month' ? '#FFFFFF' : '#475569',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Mes Actual
-          </button>
+          {/* 3. SELECTOR DE MES */}
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <CalendarDays
+              size={13}
+              style={{
+                position: 'absolute',
+                left: 10,
+                pointerEvents: 'none',
+                color: currentSelectedMonthKey ? '#7E22CE' : '#64748B',
+              }}
+            />
+            <select
+              value={currentSelectedMonthKey}
+              onChange={(e) => {
+                const key = e.target.value;
+                if (!key) return;
+                const opt = monthOptions.find((m) => m.key === key);
+                if (opt) {
+                  setFechaInicial(opt.startDate);
+                  setFechaFinal(opt.endDate);
+                  setDatePreset('custom');
+                  setCurrentPage(1);
+                }
+              }}
+              style={{
+                padding: '6px 28px 6px 28px',
+                fontSize: 12,
+                fontWeight: 700,
+                borderRadius: 8,
+                border: currentSelectedMonthKey ? '1.5px solid #7E22CE' : '1px solid #CBD5E1',
+                backgroundColor: currentSelectedMonthKey ? '#FAF5FF' : '#FFFFFF',
+                color: currentSelectedMonthKey ? '#7E22CE' : '#334155',
+                cursor: 'pointer',
+                outline: 'none',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                boxShadow: currentSelectedMonthKey ? '0 1px 4px rgba(126, 34, 206, 0.2)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+              title="Seleccionar un mes específico para consultar las notas crédito"
+            >
+              <option value="">🗓️ Escoger Mes...</option>
+              {monthOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={12}
+              style={{
+                position: 'absolute',
+                right: 9,
+                pointerEvents: 'none',
+                color: currentSelectedMonthKey ? '#7E22CE' : '#64748B',
+              }}
+            />
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setDatePreset('last_month');
-              setCurrentPage(1);
-            }}
+          {/* 4. RANGO DE FECHAS DIRECTO (DE TAL A TAL) */}
+          <div
             style={{
-              padding: '7px 14px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              borderRadius: 8,
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: datePreset === 'last_month' ? '#7E22CE' : '#F1F5F9',
-              color: datePreset === 'last_month' ? '#FFFFFF' : '#475569',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: datePreset === 'custom' && !currentSelectedMonthKey ? '#FAF5FF' : '#F8FAFC',
+              border: datePreset === 'custom' && !currentSelectedMonthKey ? '1.5px solid #7E22CE' : '1px solid #CBD5E1',
+              padding: '4px 10px',
+              borderRadius: 10,
               transition: 'all 0.15s ease',
             }}
           >
-            Mes Anterior
-          </button>
+            <CalendarRange size={13} color="#7E22CE" />
+            <span style={{ fontSize: 11, fontWeight: 750, color: '#475569', textTransform: 'uppercase' }}>
+              Rango:
+            </span>
+            <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>Desde</span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaInicial}
+              onChange={(e) => {
+                setFechaInicial(e.target.value);
+                setDatePreset('custom');
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '4px 7px',
+                fontSize: 12,
+                borderRadius: 6,
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                fontWeight: 600,
+                color: '#0F172A',
+                cursor: 'pointer',
+              }}
+              title="Fecha Inicial (Desde)"
+            />
+            <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>Hasta</span>
+            <input
+              type="date"
+              className="date-input-field"
+              value={fechaFinal}
+              onChange={(e) => {
+                setFechaFinal(e.target.value);
+                setDatePreset('custom');
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '4px 7px',
+                fontSize: 12,
+                borderRadius: 6,
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                fontWeight: 600,
+                color: '#0F172A',
+                cursor: 'pointer',
+              }}
+              title="Fecha Final (Hasta)"
+            />
+          </div>
         </div>
 
         {/* Filtros: Director + Buscador */}

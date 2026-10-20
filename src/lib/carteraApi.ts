@@ -758,6 +758,42 @@ export async function fetchCarteraCompleta(
   return result;
 }
 
+export interface MonthOption {
+  key: string;
+  label: string;
+  year: number;
+  month: number;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Genera la lista de los últimos N meses disponibles para selección rápida en dropdowns
+ */
+export function getAvailableMonths(count = 14): MonthOption[] {
+  const options: MonthOption[] = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const monthStr = String(month).padStart(2, '0');
+    const lastDay = new Date(year, month, 0).getDate();
+    const lastDayStr = String(lastDay).padStart(2, '0');
+    const monthName = d.toLocaleDateString('es-CO', { month: 'long' });
+    const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+    options.push({
+      key: `${year}-${monthStr}`,
+      label: `${capitalized} ${year}`,
+      year,
+      month,
+      startDate: `${year}-${monthStr}-01`,
+      endDate: `${year}-${monthStr}-${lastDayStr}`,
+    });
+  }
+  return options;
+}
+
 /**
  * Fechas por defecto para selector
  */
