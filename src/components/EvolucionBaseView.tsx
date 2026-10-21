@@ -92,6 +92,7 @@ export function EvolucionBaseView({
 
   // Subfiltro de la tabla de la cohorte
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'killed'>('open');
+  const [recaudoScope, setRecaudoScope] = useState<'acumulado' | 'dia'>('acumulado');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDirector, setSelectedDirector] = useState<string>(
     selectedDirectorProp && selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos'
@@ -111,13 +112,19 @@ export function EvolucionBaseView({
     });
   }, [records, fechaBase]);
 
-  // Recaudos de caja asociados a las facturas
-  const recibosRelevantes = useMemo(() => {
+  // ─── 2. RECAUDOS DE CAJA ASOCIADOS A LA BASE INICIAL ───────────────────────
+  // Recaudos de facturas emitidas en o antes de la fecha base recibidos desde fechaBase en adelante
+  const baseRecaudos = useMemo(() => {
     return recibos.filter((rc) => {
-      const fecha = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
-      return fecha >= fechaBase;
+      const fechaRec = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
+      const fechaEmis = rc.Fecha_Emision ? rc.Fecha_Emision.split('T')[0] : '';
+      if (fechaRec && fechaRec < fechaBase) return false;
+      if (fechaEmis && fechaEmis > fechaBase) return false;
+      return true;
     });
   }, [recibos, fechaBase]);
+
+  const recibosRelevantes = baseRecaudos;
 
   // Identificar qué facturas de la base ya tienen recibos que las matan o abonan
   const invoiceRecibosMap = useMemo(() => {
@@ -236,27 +243,14 @@ export function EvolucionBaseView({
 
   const latestPoint = cohortSeries[cohortSeries.length - 1] || initialPoint;
 
-  // Lista de facturas para la tabla de la cohorte
-  const filteredBaseInvoices = useMemo(() => {
+  // ─── 3. FACTURAS ABIERTAS FILTRADAS DE LA BASE ──────────────────────────────
+  const filteredOpenInvoices = useMemo(() => {
     let list = baseReceivedInvoices;
-
     if (selectedDirector !== 'Todos') {
       list = list.filter((r) => (r.directorNombre || '') === selectedDirector);
     }
-
-    if (statusFilter === 'open') {
-      list = list.filter((r) => r.Valor_Saldo > 0);
-    } else if (statusFilter === 'killed') {
-      list = list.filter((r) => {
-        const key = `${r.Prefijo}-${r.Numero}`.trim().toLowerCase();
-        const rcs = invoiceRecibosMap.get(key) || [];
-        return rcs.some((rc) => rc.Valor_Pagado >= rc.Valor_Factura) || r.Valor_Saldo === 0;
-      });
-    }
-
     if (!searchTerm.trim()) return list;
     const q = searchTerm.toLowerCase().trim();
-
     return list.filter(
       (r) =>
         r.Empresa?.toLowerCase().includes(q) ||
@@ -266,14 +260,57 @@ export function EvolucionBaseView({
         r.Nombre_Empleado?.toLowerCase().includes(q) ||
         r.directorNombre?.toLowerCase().includes(q)
     );
-  }, [baseReceivedInvoices, selectedDirector, statusFilter, searchTerm, invoiceRecibosMap]);
+  }, [baseReceivedInvoices, selectedDirector, searchTerm]);
+
+  // ─── 4. FACTURAS RECAUDADAS CON RECIBO FILTRADAS DE LA BASE ──────────────────
+  const filteredRecaudos = useMemo(() => {
+    let list = baseRecaudos;
+    if (recaudoScope === 'dia' && selectedCutoff !== fechaBase) {
+      list = list.filter((rc) => {
+        const f = reciboDateCriterion === 'fecha_recibo'
+          ? (rc.Fecha_Recibo || (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : ''))
+          : (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '');
+        return f === selectedCutoff;
+      });
+    }
+    if (selectedDirector !== 'Todos') {
+      list = list.filter((rc) => (rc.directorNombre || '') === selectedDirector);
+    }
+    if (!searchTerm.trim()) return list;
+    const q = searchTerm.toLowerCase().trim();
+    return list.filter(
+      (rc) =>
+        rc.Empresa?.toLowerCase().includes(q) ||
+        rc.Identificacion?.includes(q) ||
+        String(rc.Numero_FacturaVenta).includes(q) ||
+        String(rc.Numero_ReciboCaja).includes(q) ||
+        rc.Prefijo_FacturaVenta?.toLowerCase().includes(q) ||
+        rc.Nombre_Empleado?.toLowerCase().includes(q) ||
+        rc.directorNombre?.toLowerCase().includes(q)
+    );
+  }, [baseRecaudos, recaudoScope, selectedCutoff, fechaBase, reciboDateCriterion, selectedDirector, searchTerm]);
+
+  // Totales de la selección actual
+  const totalOpenSaldo = useMemo(
+    () => filteredOpenInvoices.reduce((sum, r) => sum + r.Valor_Saldo, 0),
+    [filteredOpenInvoices]
+  );
+  const totalRecaudadoValor = useMemo(
+    () => filteredRecaudos.reduce((sum, rc) => sum + rc.Valor_Pagado, 0),
+    [filteredRecaudos]
+  );
 
   // Exportar Colecta de Facturas a Excel
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
       const { generateEvolucionBaseExcel, downloadBufferAsFile } = await import('../lib/excelGenerator');
-      const { buffer, filename } = await generateEvolucionBaseExcel(filteredBaseInvoices, invoiceRecibosMap, fechaBase);
+      const { buffer, filename } = await generateEvolucionBaseExcel(
+        filteredOpenInvoices,
+        filteredRecaudos,
+        statusFilter,
+        fechaBase
+      );
       downloadBufferAsFile(buffer, filename);
     } catch (err) {
       console.error('Error exportando Excel:', err);
@@ -465,7 +502,15 @@ export function EvolucionBaseView({
           </div>
 
           {/* Tarjeta 2: Total Facturas Recaudadas */}
-          <div className="timeline-summary-card tone-green">
+          <div
+            className="timeline-summary-card tone-green"
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              setStatusFilter('killed');
+              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            title="Haz clic para ver las facturas recaudadas en la tabla"
+          >
             <div className="timeline-summary-top">
               <span className="timeline-summary-label">Total Facturas Recaudadas</span>
               <span className="cohort-kpi-badge green">Cerradas</span>
@@ -481,12 +526,20 @@ export function EvolucionBaseView({
                     : 0
                 )}
               </strong>{' '}
-              saldadas con recibo de caja
+              saldadas con recibo de caja · Ver tabla ↓
             </span>
           </div>
 
           {/* Tarjeta 3: Saldo Restante de la Base */}
-          <div className="timeline-summary-card tone-blue">
+          <div
+            className="timeline-summary-card tone-blue"
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              setStatusFilter('open');
+              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            title="Haz clic para ver las facturas abiertas en la tabla"
+          >
             <div className="timeline-summary-top">
               <span className="timeline-summary-label">Saldo Restante de la Base</span>
               <span className="cohort-kpi-badge purple">Por Cobrar</span>
@@ -495,7 +548,7 @@ export function EvolucionBaseView({
               {formatCurrency(latestPoint.stillOpenPending)}
             </strong>
             <span className="timeline-summary-sub">
-              <strong>{formatNumber(latestPoint.stillOpenCount)} facturas</strong> aún abiertas de la base recibida
+              <strong>{formatNumber(latestPoint.stillOpenCount)} facturas</strong> aún abiertas de la base recibida · Ver tabla ↓
             </span>
           </div>
         </div>
@@ -727,6 +780,29 @@ export function EvolucionBaseView({
                         <small style={{ color: '#15803d', fontSize: '10px', fontWeight: 650 }}>
                           -{formatCurrency(dailyWithdrawn)}
                         </small>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCutoff(pt.cutoff);
+                            setStatusFilter('killed');
+                            setRecaudoScope('dia');
+                            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          style={{
+                            display: 'inline-block',
+                            marginTop: 3,
+                            color: '#15803d',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                          }}
+                          title={`Ver las ${dailyCount} facturas recaudadas el ${formatCutoffText(pt.cutoff)} en la tabla`}
+                        >
+                          Ver {dailyCount} en tabla ↓
+                        </span>
                       </>
                     ) : (
                       <span className="text-muted" style={{ fontSize: '11px' }}>0 facturas salieron</span>
@@ -741,6 +817,7 @@ export function EvolucionBaseView({
 
       {/* ─── SECCIÓN 2: AUDITORÍA DE FACTURAS DE LA BASE INICIAL ─── */}
       <div
+        id="tabla-evolucion-base"
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: 16,
@@ -752,14 +829,22 @@ export function EvolucionBaseView({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 750, color: '#0F172A' }}>
-              Facturas Entregadas en la Base Inicial ({formatNumber(filteredBaseInvoices.length)})
+              {statusFilter === 'killed'
+                ? `Facturas Recaudadas con Recibo de Caja (${formatNumber(filteredRecaudos.length)})`
+                : statusFilter === 'open'
+                ? `Facturas Abiertas en Cartera (${formatNumber(filteredOpenInvoices.length)})`
+                : `Base Inicial de Partida (${formatNumber(filteredOpenInvoices.length + filteredRecaudos.length)})`}
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#64748B' }}>
-              Inventario de facturas con fecha de emisión hasta el {formatCutoffText(fechaBase)}.
+              {statusFilter === 'killed'
+                ? `Recaudos aplicados a la base entregada al ${formatCutoffText(fechaBase)} · Suma: ${formatCurrency(totalRecaudadoValor)}`
+                : statusFilter === 'open'
+                ? `Facturas de la base entregada que aún tienen saldo por cobrar · Suma: ${formatCurrency(totalOpenSaldo)}`
+                : `Inventario consolidado: facturas abiertas y recaudadas de la base al ${formatCutoffText(fechaBase)}.`}
             </p>
           </div>
 
-          {/* Filtros: Sub-estado + Director + Buscador */}
+          {/* Filtros: Sub-estado + Alcance Diario/Acumulado + Director + Buscador + Excel */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Toggle de Sub-estado */}
             <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', padding: 3, borderRadius: 10 }}>
@@ -778,7 +863,7 @@ export function EvolucionBaseView({
                   boxShadow: statusFilter === 'open' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🔴 Abiertas ({baseReceivedInvoices.filter((r) => r.Valor_Saldo > 0).length})
+                🔴 Abiertas ({formatNumber(baseReceivedInvoices.length)})
               </button>
               <button
                 type="button"
@@ -786,7 +871,7 @@ export function EvolucionBaseView({
                 style={{
                   padding: '6px 12px',
                   fontSize: 12,
-                  fontWeight: 650,
+                  fontWeight: 700,
                   borderRadius: 7,
                   border: 'none',
                   cursor: 'pointer',
@@ -795,7 +880,7 @@ export function EvolucionBaseView({
                   boxShadow: statusFilter === 'killed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🟢 Recaudadas con Recibo
+                🟢 Recaudadas con Recibo ({formatNumber(baseRecaudos.length)})
               </button>
               <button
                 type="button"
@@ -812,9 +897,51 @@ export function EvolucionBaseView({
                   boxShadow: statusFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                Todas ({baseReceivedInvoices.length})
+                📋 Base Completa ({formatNumber(baseReceivedInvoices.length + baseRecaudos.length)})
               </button>
             </div>
+
+            {/* Sub-selector de alcance para Recaudadas: Día seleccionado vs Todo Acumulado */}
+            {statusFilter === 'killed' && selectedCutoff !== fechaBase && (
+              <div style={{ display: 'inline-flex', gap: 3, background: '#E2E8F0', padding: 2, borderRadius: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setRecaudoScope('dia')}
+                  style={{
+                    padding: '5px 9px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: recaudoScope === 'dia' ? '#FFFFFF' : 'transparent',
+                    color: recaudoScope === 'dia' ? '#15803D' : '#475569',
+                    boxShadow: recaudoScope === 'dia' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  }}
+                  title={`Ver solo los recaudos del día ${formatCutoffText(selectedCutoff)}`}
+                >
+                  🗓️ Solo {formatCutoffText(selectedCutoff)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecaudoScope('acumulado')}
+                  style={{
+                    padding: '5px 9px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: recaudoScope === 'acumulado' ? '#FFFFFF' : 'transparent',
+                    color: recaudoScope === 'acumulado' ? '#15803D' : '#475569',
+                    boxShadow: recaudoScope === 'acumulado' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  }}
+                  title="Ver todos los recaudos acumulados de la base"
+                >
+                  📊 Acumulado Base ({formatNumber(baseRecaudos.length)})
+                </button>
+              </div>
+            )}
 
             {/* Director */}
             <select
@@ -840,7 +967,7 @@ export function EvolucionBaseView({
             </select>
 
             {/* Buscador */}
-            <div style={{ position: 'relative', width: 220 }}>
+            <div style={{ position: 'relative', width: 200 }}>
               <Search
                 size={14}
                 style={{
@@ -866,44 +993,170 @@ export function EvolucionBaseView({
                 }}
               />
             </div>
+
+            {/* Botón Descargar Excel */}
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={handleExportExcel}
+              disabled={isExportingExcel}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#1E293B',
+              }}
+              title="Descargar datos actuales en Excel profesional"
+            >
+              <Download size={13} />
+              <span>{isExportingExcel ? 'Generando...' : 'Descargar Excel'}</span>
+            </button>
           </div>
         </div>
 
-        {/* Tabla */}
+        {/* Tabla Dinámica según Sub-estado */}
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-          <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-            <thead>
-              <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>#</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>No. Factura</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Cliente / Empresa</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>NIT</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Comercial</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Director</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'right' }}>
-                  Saldo Cartera
-                </th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-                  Estado
-                </th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Emisión</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Vencimiento</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredBaseInvoices.length === 0 ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '32px 14px', color: '#94A3B8' }}>
-                    No se encontraron facturas para los filtros seleccionados.
-                  </td>
+          {statusFilter === 'killed' ? (
+            /* TABLA 1: FACTURAS RECAUDADAS CON RECIBO DE CAJA */
+            <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F0FDF4', borderBottom: '1px solid #BBF7D0' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>#</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>No. Factura</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Recibo de Caja</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Cliente / Razón Social</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>NIT</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Comercial</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Director</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534', textAlign: 'right' }}>Vr. Factura</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534', textAlign: 'right' }}>Vr. Recaudado</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534', textAlign: 'center' }}>Estado</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Fecha Emisión</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#166534' }}>Fecha Recaudo</th>
                 </tr>
-              ) : (
-                filteredBaseInvoices.slice(0, 100).map((r, idx) => {
-                  const key = `${r.Prefijo}-${r.Numero}`.trim().toLowerCase();
-                  const rcs = invoiceRecibosMap.get(key) || [];
-                  const isKilled = rcs.some((rc) => rc.Valor_Pagado >= rc.Valor_Factura) || r.Valor_Saldo === 0;
-
-                  return (
+              </thead>
+              <tbody>
+                {filteredRecaudos.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} style={{ textAlign: 'center', padding: '36px 14px', color: '#94A3B8' }}>
+                      No se encontraron facturas recaudadas para los filtros seleccionados.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRecaudos.slice(0, 100).map((rc, idx) => {
+                    const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+                    return (
+                      <tr
+                        key={rc.id || `rc-${idx}`}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                          cursor: onSelectRecord ? 'pointer' : 'default',
+                        }}
+                        onClick={() => {
+                          if (onSelectRecord) {
+                            onSelectRecord({
+                              id: `rc-${rc.Numero_ReciboCaja}`,
+                              Grupo_Comercial: rc.Grupo_Personal || '',
+                              Nombre_Empleado: rc.Nombre_Empleado,
+                              Identificacion: rc.Identificacion,
+                              Dv: '',
+                              Empresa: rc.Empresa,
+                              Cupo_Credito: 0,
+                              Estado_Cliente: 'Activo',
+                              Plazo_PagoCliente: rc.Dias_PlazoPago || 30,
+                              Prefijo: rc.Prefijo_FacturaVenta,
+                              Numero: Number(rc.Numero_FacturaVenta) || 0,
+                              Tipo_Documento: 'Factura Venta',
+                              Fecha_Emision: rc.Fecha_Emision,
+                              Fecha_Vencimiento: rc.Fecha_Vencimiento || '',
+                              Plazo_Pago: rc.Dias_PlazoPago || 30,
+                              Dias_Emision: 0,
+                              Dias_Vencimiento: rc.Dias_Pago || 0,
+                              Rango_Cartera: 'CANCELADA',
+                              Valor_Saldo: 0,
+                              Productos: [],
+                              grupoNumero: rc.grupoNumero || 0,
+                              grupoNombre: `Grupo ${rc.grupoNumero || 0}`,
+                              directorNombre: rc.directorNombre || '',
+                              directorEmail: '',
+                              categoriaEdad: 'CORRIENTE',
+                              diasVencimientoCalc: rc.Dias_Pago || 0,
+                              estaVencida: false,
+                            });
+                          }
+                        }}
+                      >
+                        <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{idx + 1}</td>
+                        <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0071e3' }}>
+                          {rc.Prefijo_FacturaVenta} {rc.Numero_FacturaVenta}
+                        </td>
+                        <td style={{ padding: '9px 14px', fontWeight: 700, color: '#16a34a' }}>
+                          RC-{rc.Numero_ReciboCaja}
+                        </td>
+                        <td style={{ padding: '9px 14px', fontWeight: 600, color: '#1E293B' }}>{rc.Empresa}</td>
+                        <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{rc.Identificacion}</td>
+                        <td style={{ padding: '9px 14px', color: '#334155' }}>{rc.Nombre_Empleado}</td>
+                        <td style={{ padding: '9px 14px', color: '#475569' }}>{rc.directorNombre || '—'}</td>
+                        <td style={{ padding: '9px 14px', textAlign: 'right', color: '#64748B', fontSize: 12 }}>
+                          {formatCurrency(rc.Valor_Factura)}
+                        </td>
+                        <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, color: '#166534' }}>
+                          {formatCurrency(rc.Valor_Pagado)}
+                        </td>
+                        <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                          <span
+                            className={`badge ${isKilled ? 'badge-success' : 'badge-warning'}`}
+                            style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}
+                          >
+                            {isKilled ? '100% RECAUDADA' : 'ABONO RECIBO'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
+                          {rc.Fecha_Emision ? rc.Fecha_Emision.split('T')[0] : '—'}
+                        </td>
+                        <td style={{ padding: '9px 14px', color: '#166534', fontWeight: 650, fontSize: 12 }}>
+                          {rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : (rc.Fecha_Recibo || '—')}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          ) : statusFilter === 'open' ? (
+            /* TABLA 2: FACTURAS ABIERTAS EN CARTERA */
+            <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>#</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>No. Factura</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Cliente / Empresa</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>NIT</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Comercial</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Director</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'right' }}>
+                    Saldo Cartera
+                  </th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+                    Estado
+                  </th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Emisión</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Vencimiento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOpenInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px 14px', color: '#94A3B8' }}>
+                      No se encontraron facturas abiertas para los filtros seleccionados.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOpenInvoices.slice(0, 100).map((r, idx) => (
                     <tr
                       key={r.id || `inv-${idx}`}
                       style={{
@@ -926,10 +1179,10 @@ export function EvolucionBaseView({
                       </td>
                       <td style={{ padding: '9px 14px', textAlign: 'center' }}>
                         <span
-                          className={`badge ${isKilled ? 'badge-success' : r.estaVencida ? 'badge-danger' : 'badge-warning'}`}
+                          className={`badge ${r.estaVencida ? 'badge-danger' : 'badge-warning'}`}
                           style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}
                         >
-                          {isKilled ? '100% RECAUDADA' : r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
+                          {r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
                         </span>
                       </td>
                       <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
@@ -939,16 +1192,132 @@ export function EvolucionBaseView({
                         {r.Fecha_Vencimiento ? r.Fecha_Vencimiento.split('T')[0] : '—'}
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : (
+            /* TABLA 3: BASE COMPLETA (ABIERTAS + RECAUDADAS) */
+            <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>#</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>No. Factura</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Documento / Recibo</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Cliente / Empresa</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>NIT</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Comercial</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Director</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'right' }}>
+                    Saldo / Vr. Pagado
+                  </th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+                    Estado Base
+                  </th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Emisión</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569' }}>Vence / Recaudo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOpenInvoices.length + filteredRecaudos.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} style={{ textAlign: 'center', padding: '36px 14px', color: '#94A3B8' }}>
+                      No se encontraron registros en la base para los filtros seleccionados.
+                    </td>
+                  </tr>
+                ) : (
+                  [
+                    ...filteredOpenInvoices.map((r, i) => ({ type: 'open' as const, data: r, key: `open-${i}` })),
+                    ...filteredRecaudos.map((rc, i) => ({ type: 'killed' as const, data: rc, key: `rc-${i}` })),
+                  ]
+                    .slice(0, 100)
+                    .map((item, idx) => {
+                      if (item.type === 'open') {
+                        const r = item.data as CarteraRecord;
+                        return (
+                          <tr
+                            key={item.key}
+                            style={{
+                              borderBottom: '1px solid #F1F5F9',
+                              backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                              cursor: onSelectRecord ? 'pointer' : 'default',
+                            }}
+                            onClick={() => onSelectRecord && onSelectRecord(r)}
+                          >
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{idx + 1}</td>
+                            <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0071e3' }}>
+                              {r.Prefijo} {r.Numero}
+                            </td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>Factura Venta</td>
+                            <td style={{ padding: '9px 14px', fontWeight: 600, color: '#1E293B' }}>{r.Empresa}</td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{r.Identificacion}</td>
+                            <td style={{ padding: '9px 14px', color: '#334155' }}>{r.Nombre_Empleado}</td>
+                            <td style={{ padding: '9px 14px', color: '#475569' }}>{r.directorNombre}</td>
+                            <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 750, color: '#DC2626' }}>
+                              {formatCurrency(r.Valor_Saldo)}
+                            </td>
+                            <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                              <span className="badge badge-warning" style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>
+                                🔴 PENDIENTE EN CARTERA
+                              </span>
+                            </td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
+                              {r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '—'}
+                            </td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
+                              {r.Fecha_Vencimiento ? r.Fecha_Vencimiento.split('T')[0] : '—'}
+                            </td>
+                          </tr>
+                        );
+                      } else {
+                        const rc = item.data as ReciboCajaRecord;
+                        return (
+                          <tr
+                            key={item.key}
+                            style={{
+                              borderBottom: '1px solid #F1F5F9',
+                              backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                            }}
+                          >
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{idx + 1}</td>
+                            <td style={{ padding: '9px 14px', fontWeight: 700, color: '#166534' }}>
+                              {rc.Prefijo_FacturaVenta} {rc.Numero_FacturaVenta}
+                            </td>
+                            <td style={{ padding: '9px 14px', fontWeight: 700, color: '#16a34a', fontSize: 12 }}>
+                              RC-{rc.Numero_ReciboCaja}
+                            </td>
+                            <td style={{ padding: '9px 14px', fontWeight: 600, color: '#1E293B' }}>{rc.Empresa}</td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>{rc.Identificacion}</td>
+                            <td style={{ padding: '9px 14px', color: '#334155' }}>{rc.Nombre_Empleado}</td>
+                            <td style={{ padding: '9px 14px', color: '#475569' }}>{rc.directorNombre || '—'}</td>
+                            <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 750, color: '#166534' }}>
+                              {formatCurrency(rc.Valor_Pagado)}
+                            </td>
+                            <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                              <span className="badge badge-success" style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>
+                                🟢 100% RECAUDADA
+                              </span>
+                            </td>
+                            <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
+                              {rc.Fecha_Emision ? rc.Fecha_Emision.split('T')[0] : '—'}
+                            </td>
+                            <td style={{ padding: '9px 14px', color: '#166534', fontWeight: 650, fontSize: 12 }}>
+                              {rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : (rc.Fecha_Recibo || '—')}
+                            </td>
+                          </tr>
+                        );
+                      }
+                    })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
 
-        {filteredBaseInvoices.length > 100 && (
+        {/* Paginación / Aviso */}
+        {((statusFilter === 'killed' ? filteredRecaudos.length : statusFilter === 'open' ? filteredOpenInvoices.length : filteredOpenInvoices.length + filteredRecaudos.length) > 100) && (
           <div style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12, color: '#64748B' }}>
-            Mostrando las primeras 100 facturas de {formatNumber(filteredBaseInvoices.length)}. Usa el buscador o descarga el Excel completo para ver todas.
+            Mostrando las primeras 100 de {formatNumber(statusFilter === 'killed' ? filteredRecaudos.length : statusFilter === 'open' ? filteredOpenInvoices.length : filteredOpenInvoices.length + filteredRecaudos.length)} facturas. Usa el buscador o descarga el Excel completo para ver todas.
           </div>
         )}
       </div>

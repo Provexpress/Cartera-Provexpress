@@ -675,7 +675,8 @@ export async function generateNotasCreditoExcel(
 // ─── 4. INFORME DE EVOLUCIÓN BASE 06/10 ──────────────────────────────────────
 export async function generateEvolucionBaseExcel(
   records: CarteraRecord[],
-  invoiceRecibosMap: Map<string, ReciboCajaRecord[]>,
+  recaudos: ReciboCajaRecord[] = [],
+  statusFilter: 'all' | 'open' | 'killed' = 'open',
   fechaBase = '2026-10-06'
 ): Promise<{ buffer: ArrayBuffer; filename: string }> {
   const ExcelJSModule = await import('exceljs');
@@ -684,81 +685,164 @@ export async function generateEvolucionBaseExcel(
   workbook.creator = 'Provexpress SAS · Sistema de Cartera ERP';
   workbook.created = new Date();
 
-  const totalSaldo = records.reduce((sum, r) => sum + r.Valor_Saldo, 0);
-
-  const ws = workbook.addWorksheet('Base Inicial 06-10');
-  applyHeaderBanner(ws, {
-    title: 'Evolución de Cartera - Base Inicial Fija (06/10)',
-    subtitle: `Fecha de Corte Base: ${fechaBase} · Universo Total: ${records.length} Facturas`,
-    statsText: `Saldo Base: $ ${totalSaldo.toLocaleString('es-CO')}`,
-    lastColLetter: 'L',
-    theme: 'purple',
-  });
-
-  const cols = [
-    { header: '#', key: 'rank', width: 6, isCenter: true },
-    { header: 'No. Factura', key: 'factura', width: 16, isCenter: true },
-    { header: 'Cliente / Empresa', key: 'empresa', width: 34 },
-    { header: 'NIT', key: 'nit', width: 14, isCenter: true },
-    { header: 'Comercial Asesor', key: 'comercial', width: 28 },
-    { header: 'Director Comercial', key: 'director', width: 26 },
-    { header: 'Saldo Cartera', key: 'saldo', width: 18, isCurrency: true, isBold: true },
-    { header: 'Estado Cobro', key: 'estado', width: 18, isCenter: true },
-    { header: 'Categoría Edad', key: 'edad', width: 16, isCenter: true },
-    { header: 'Días Vencido', key: 'dias', width: 14, isNumber: true },
-    { header: 'Fecha Emisión', key: 'fechaEmision', width: 14, isDate: true },
-    { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 14, isDate: true },
-  ];
-
-  const headerRowIdx = 5;
-  const hRow = ws.getRow(headerRowIdx);
-  cols.forEach((col, idx) => {
-    hRow.getCell(idx + 1).value = col.header;
-    ws.getColumn(idx + 1).width = col.width;
-    ws.getColumn(idx + 1).key = col.key;
-  });
-
-  records.forEach((r, idx) => {
-    const key = `${r.Prefijo}-${r.Numero}`.trim().toLowerCase();
-    const rcs = invoiceRecibosMap.get(key) || [];
-    const isKilled = rcs.some((rc) => rc.Valor_Pagado >= rc.Valor_Factura) || r.Valor_Saldo === 0;
-
-    ws.addRow({
-      rank: idx + 1,
-      factura: `${r.Prefijo} ${r.Numero}`.trim(),
-      empresa: r.Empresa,
-      nit: r.Identificacion,
-      comercial: r.Nombre_Empleado,
-      director: r.directorNombre,
-      saldo: r.Valor_Saldo,
-      estado: isKilled ? '100% RECAUDADA' : 'PENDIENTE',
-      edad: r.categoriaEdad,
-      dias: r.Dias_Vencimiento,
-      fechaEmision: r.Fecha_Emision?.split('T')[0] || '',
-      fechaVencimiento: r.Fecha_Vencimiento?.split('T')[0] || '',
+  const addOpenSheet = () => {
+    const totalSaldo = records.reduce((sum, r) => sum + r.Valor_Saldo, 0);
+    const ws = workbook.addWorksheet('Facturas Abiertas');
+    applyHeaderBanner(ws, {
+      title: 'Evolución Cartera - Facturas Abiertas Base Inicial',
+      subtitle: `Fecha de Corte Base: ${fechaBase} · Total Abiertas: ${records.length} Facturas`,
+      statsText: `Saldo Restante: $ ${totalSaldo.toLocaleString('es-CO')}`,
+      lastColLetter: 'K',
+      theme: 'purple',
     });
-  });
 
-  const dataStart = headerRowIdx + 1;
-  const dataEnd = headerRowIdx + records.length;
-  formatTableWorksheet(ws, {
-    headerRow: headerRowIdx,
-    dataStartRow: dataStart,
-    dataEndRow: dataEnd,
-    colKeys: cols,
-    theme: 'purple',
-  });
+    const cols = [
+      { header: '#', key: 'rank', width: 6, isCenter: true },
+      { header: 'No. Factura', key: 'factura', width: 16, isCenter: true },
+      { header: 'Cliente / Empresa', key: 'empresa', width: 34 },
+      { header: 'NIT', key: 'nit', width: 14, isCenter: true },
+      { header: 'Comercial Asesor', key: 'comercial', width: 28 },
+      { header: 'Director Comercial', key: 'director', width: 26 },
+      { header: 'Saldo Cartera', key: 'saldo', width: 18, isCurrency: true, isBold: true },
+      { header: 'Categoría Edad', key: 'edad', width: 16, isCenter: true },
+      { header: 'Días Vencido', key: 'dias', width: 14, isNumber: true },
+      { header: 'Fecha Emisión', key: 'fechaEmision', width: 14, isDate: true },
+      { header: 'Fecha Vencimiento', key: 'fechaVencimiento', width: 14, isDate: true },
+    ];
 
-  addTotalRow(
-    ws,
-    dataEnd + 1,
-    { saldo: totalSaldo },
-    cols.map((c) => c.key),
-    'A'
-  );
+    const headerRowIdx = 5;
+    const hRow = ws.getRow(headerRowIdx);
+    cols.forEach((col, idx) => {
+      hRow.getCell(idx + 1).value = col.header;
+      ws.getColumn(idx + 1).width = col.width;
+      ws.getColumn(idx + 1).key = col.key;
+    });
+
+    records.forEach((r, idx) => {
+      ws.addRow({
+        rank: idx + 1,
+        factura: `${r.Prefijo} ${r.Numero}`.trim(),
+        empresa: r.Empresa,
+        nit: r.Identificacion,
+        comercial: r.Nombre_Empleado,
+        director: r.directorNombre,
+        saldo: r.Valor_Saldo,
+        edad: r.categoriaEdad,
+        dias: r.Dias_Vencimiento,
+        fechaEmision: r.Fecha_Emision?.split('T')[0] || '',
+        fechaVencimiento: r.Fecha_Vencimiento?.split('T')[0] || '',
+      });
+    });
+
+    const dataStart = headerRowIdx + 1;
+    const dataEnd = headerRowIdx + records.length;
+    formatTableWorksheet(ws, {
+      headerRow: headerRowIdx,
+      dataStartRow: dataStart,
+      dataEndRow: dataEnd,
+      colKeys: cols,
+      theme: 'purple',
+    });
+
+    addTotalRow(
+      ws,
+      dataEnd + 1,
+      { saldo: totalSaldo },
+      cols.map((c) => c.key),
+      'A'
+    );
+  };
+
+  const addRecaudosSheet = () => {
+    const totalRecaudado = recaudos.reduce((sum, rc) => sum + rc.Valor_Pagado, 0);
+    const totalFactura = recaudos.reduce((sum, rc) => sum + rc.Valor_Factura, 0);
+    const ws = workbook.addWorksheet('Facturas Recaudadas');
+    applyHeaderBanner(ws, {
+      title: 'Evolución Cartera - Facturas Recaudadas con Recibo de Caja',
+      subtitle: `Facturas de la Base Inicial recaudadas desde ${fechaBase} · Total: ${recaudos.length} Recaudos`,
+      statsText: `Total Recaudado: $ ${totalRecaudado.toLocaleString('es-CO')}`,
+      lastColLetter: 'M',
+      theme: 'green',
+    });
+
+    const cols = [
+      { header: '#', key: 'rank', width: 6, isCenter: true },
+      { header: 'No. Factura', key: 'factura', width: 16, isCenter: true },
+      { header: 'No. Recibo Caja', key: 'recibo', width: 16, isCenter: true },
+      { header: 'Cliente / Empresa', key: 'empresa', width: 34 },
+      { header: 'NIT', key: 'nit', width: 14, isCenter: true },
+      { header: 'Comercial Asesor', key: 'comercial', width: 28 },
+      { header: 'Director Comercial', key: 'director', width: 26 },
+      { header: 'Vr. Factura', key: 'vrFactura', width: 18, isCurrency: true },
+      { header: 'Vr. Pagado (Recaudo)', key: 'vrPagado', width: 20, isCurrency: true, isBold: true },
+      { header: 'Estado Cobro', key: 'estado', width: 18, isCenter: true },
+      { header: 'Fecha Emisión', key: 'fechaEmision', width: 14, isDate: true },
+      { header: 'Fecha Recaudo', key: 'fechaRecaudo', width: 14, isDate: true },
+      { header: 'Días Pago', key: 'diasPago', width: 12, isNumber: true },
+    ];
+
+    const headerRowIdx = 5;
+    const hRow = ws.getRow(headerRowIdx);
+    cols.forEach((col, idx) => {
+      hRow.getCell(idx + 1).value = col.header;
+      ws.getColumn(idx + 1).width = col.width;
+      ws.getColumn(idx + 1).key = col.key;
+    });
+
+    recaudos.forEach((rc, idx) => {
+      const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+      ws.addRow({
+        rank: idx + 1,
+        factura: `${rc.Prefijo_FacturaVenta} ${rc.Numero_FacturaVenta}`.trim(),
+        recibo: `RC-${rc.Numero_ReciboCaja}`,
+        empresa: rc.Empresa,
+        nit: rc.Identificacion,
+        comercial: rc.Nombre_Empleado,
+        director: rc.directorNombre || '',
+        vrFactura: rc.Valor_Factura,
+        vrPagado: rc.Valor_Pagado,
+        estado: isKilled ? '100% RECAUDADA' : 'ABONO RECIBO',
+        fechaEmision: rc.Fecha_Emision?.split('T')[0] || '',
+        fechaRecaudo: rc.Fecha_Recaudo?.split('T')[0] || (rc.Fecha_Recibo || ''),
+        diasPago: rc.Dias_Pago || 0,
+      });
+    });
+
+    const dataStart = headerRowIdx + 1;
+    const dataEnd = headerRowIdx + recaudos.length;
+    formatTableWorksheet(ws, {
+      headerRow: headerRowIdx,
+      dataStartRow: dataStart,
+      dataEndRow: dataEnd,
+      colKeys: cols,
+      theme: 'green',
+    });
+
+    addTotalRow(
+      ws,
+      dataEnd + 1,
+      { vrFactura: totalFactura, vrPagado: totalRecaudado },
+      cols.map((c) => c.key),
+      'A'
+    );
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+  let filename = '';
+
+  if (statusFilter === 'killed') {
+    addRecaudosSheet();
+    filename = `Facturas_Recaudadas_Base_06_Octubre_${today}.xlsx`;
+  } else if (statusFilter === 'open') {
+    addOpenSheet();
+    filename = `Facturas_Abiertas_Base_06_Octubre_${today}.xlsx`;
+  } else {
+    addOpenSheet();
+    addRecaudosSheet();
+    filename = `Evolucion_Base_Inicial_Completa_06_Octubre_${today}.xlsx`;
+  }
 
   const buffer = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
-  const filename = `Cartera_Base_Inicial_06_Octubre_${new Date().toISOString().split('T')[0]}.xlsx`;
   return { buffer, filename };
 }
 
