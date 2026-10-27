@@ -844,3 +844,83 @@ export function formatNumber(num: number): string {
 export function formatPercent(pct: number): string {
   return `${pct.toFixed(1)}%`;
 }
+
+/**
+ * Formatea una fecha ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss) a formato legible en español (ej: 08 oct 2026).
+ */
+export function formatPrettyDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const clean = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = clean.split('-');
+    if (parts.length !== 3) return dateStr;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]);
+    const d = Number(parts[2]);
+    if (!y || !m || !d) return dateStr;
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Construye un mapa acumulativo de los valores pagados por factura a partir de una lista de recibos de caja.
+ * Clave: 'PREFIJO-NUMERO' (ej: 'FVE-118101').
+ */
+export function buildInvoiceTotalPaidMap(recibos: ReciboCajaRecord[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const rc of recibos) {
+    const num = Number(rc.Numero_FacturaVenta) || 0;
+    if (num > 0) {
+      const prefijo = String(rc.Prefijo_FacturaVenta || 'FVE').trim().toUpperCase();
+      const key = `${prefijo}-${num}`;
+      map.set(key, (map.get(key) || 0) + Math.abs(Number(rc.Valor_Pagado) || 0));
+    }
+  }
+  return map;
+}
+
+/**
+ * Determina si un recibo de caja cubre la totalidad de la factura o si es un abono parcial.
+ * Considera tolerancias de centavos del sistema bancario / ERP (redondeos <= $50 COP o >= 99.5%),
+ * notas de ajuste con montos negativos, y acumulación de múltiples recibos para una misma factura.
+ */
+export function isReciboSaldado(
+  rc: ReciboCajaRecord,
+  invoiceTotalPaidMap?: Map<string, number>
+): boolean {
+  const vf = Math.abs(Number(rc.Valor_Factura) || 0);
+  const vp = Math.abs(Number(rc.Valor_Pagado) || 0);
+
+  // 1. Facturas con valor 0 o ajustes directos cancelados
+  if (vf === 0) return true;
+
+  // 2. Si el valor pagado es mayor o igual matemáticamente
+  if (vp >= vf) return true;
+
+  // 3. Redondeo entero sin centavos (ej: $1.178.032 pagados vs $1.178.032,17 facturados)
+  if (Math.round(vp) >= Math.round(vf)) return true;
+
+  // 4. Margen de tolerancia bancaria/centavos (diferencia <= 50 pesos o >= 99.5% liquidado)
+  if (vf - vp <= 50 || (vf > 0 && vp / vf >= 0.995)) return true;
+
+  // 5. Verificación por acumulación de múltiples recibos que liquidan la factura
+  if (invoiceTotalPaidMap) {
+    const num = Number(rc.Numero_FacturaVenta) || 0;
+    if (num > 0) {
+      const prefijo = String(rc.Prefijo_FacturaVenta || 'FVE').trim().toUpperCase();
+      const key = `${prefijo}-${num}`;
+      const totalPaid = Math.abs(invoiceTotalPaidMap.get(key) || 0);
+      if (totalPaid >= vf - 50 || (vf > 0 && totalPaid / vf >= 0.995)) return true;
+    }
+  }
+
+  return false;
+}
+

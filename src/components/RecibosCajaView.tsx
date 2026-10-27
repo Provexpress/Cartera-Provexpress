@@ -19,7 +19,16 @@ import {
   X,
 } from 'lucide-react';
 import type { ReciboCajaRecord } from '../types';
-import { formatCurrency, formatNumber, formatPercent, getAvailableMonths, type MonthOption } from '../lib/carteraApi';
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  formatPrettyDate,
+  getAvailableMonths,
+  isReciboSaldado,
+  buildInvoiceTotalPaidMap,
+  type MonthOption,
+} from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 import { GestoresCobranzaWidget } from './GestoresCobranzaWidget';
 import { getGestorCobranza, type GestorCobranzaId } from '../lib/gestoresCobranza';
@@ -74,6 +83,9 @@ export function RecibosCajaView({ recibos }: Props) {
     }
     return r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '';
   };
+
+  // Mapa acumulado de pagos por factura para identificar facturas cubiertas con múltiples recibos
+  const invoiceTotalPaidMap = useMemo(() => buildInvoiceTotalPaidMap(recibos), [recibos]);
 
   // 1. Filtrado por período de fecha según la perspectiva seleccionada
   const dateFilteredRecibos = useMemo(() => {
@@ -611,7 +623,7 @@ export function RecibosCajaView({ recibos }: Props) {
           <input
             type="date"
             className="date-input-field"
-            value={fechaInicial}
+            value={datePreset === 'all' ? '' : fechaInicial}
             onChange={(e) => {
               setFechaInicial(e.target.value);
               setDatePreset('custom');
@@ -633,7 +645,7 @@ export function RecibosCajaView({ recibos }: Props) {
           <input
             type="date"
             className="date-input-field"
-            value={fechaFinal}
+            value={datePreset === 'all' ? '' : fechaFinal}
             onChange={(e) => {
               setFechaFinal(e.target.value);
               setDatePreset('custom');
@@ -1133,7 +1145,7 @@ export function RecibosCajaView({ recibos }: Props) {
               ) : (
                 paginated.map((rc, idx) => {
                   const globalIdx = (currentPage - 1) * pageSize + idx + 1;
-                  const isSaldada = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+                  const isSaldada = isReciboSaldado(rc, invoiceTotalPaidMap);
                   const gestorInfo = getGestorCobranza(rc.Nombre_Empleado);
                   return (
                     <tr

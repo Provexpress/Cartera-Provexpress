@@ -36,6 +36,8 @@ import {
   formatCurrency,
   formatNumber,
   formatPercent,
+  isReciboSaldado,
+  buildInvoiceTotalPaidMap,
 } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 
@@ -280,6 +282,8 @@ export function GestionDiaADiaView({
   }, [cohortSeries, selectedCutoff, latestPoint]);
 
   // ─── 2. MONITOR OPERATIVO EN VIVO: ¿QUÉ SALIÓ Y QUÉ ENTRÓ? ────────────────
+  const invoiceTotalPaidMap = useMemo(() => buildInvoiceTotalPaidMap(recibos || []), [recibos]);
+
   // Modo de filtro: 'dia' (solo el día seleccionado) o 'acumulado' (todo desde la base)
   const [filterMode, setFilterMode] = useState<'dia' | 'acumulado'>('dia');
 
@@ -1758,7 +1762,7 @@ export function GestionDiaADiaView({
                   currentList.map((item, idx) => {
                     if (activeTab === 'salientes') {
                       const rc = item as ReciboCajaRecord;
-                      const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+                      const isKilled = isReciboSaldado(rc, invoiceTotalPaidMap);
                       return (
                         <tr
                           key={rc.id || `rc-${idx}`}

@@ -1,4 +1,5 @@
 import type { Fill, Font } from 'exceljs';
+import { isReciboSaldado, buildInvoiceTotalPaidMap } from './carteraApi';
 import type {
   CarteraDataState,
   CarteraRecord,
@@ -496,8 +497,10 @@ export async function generateRecibosCajaExcel(
     ws.getColumn(idx + 1).key = col.key;
   });
 
+  const invMap = buildInvoiceTotalPaidMap(recibos);
+
   recibos.forEach((r) => {
-    const isSaldada = r.Valor_Pagado >= r.Valor_Factura && r.Valor_Factura > 0;
+    const isSaldada = isReciboSaldado(r, invMap);
     ws.addRow({
       rc: `RC-${r.Numero_ReciboCaja}`,
       fechaRecaudo: r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '',
@@ -789,8 +792,10 @@ export async function generateEvolucionBaseExcel(
       ws.getColumn(idx + 1).key = col.key;
     });
 
+    const invMap = buildInvoiceTotalPaidMap(recaudos);
+
     recaudos.forEach((rc, idx) => {
-      const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+      const isKilled = isReciboSaldado(rc, invMap);
       ws.addRow({
         rank: idx + 1,
         factura: `${rc.Prefijo_FacturaVenta} ${rc.Numero_FacturaVenta}`.trim(),
@@ -908,8 +913,9 @@ export async function generateGestionDiaADiaExcel(
   });
 
   if (isSalientes) {
+    const invMap = buildInvoiceTotalPaidMap(currentList as ReciboCajaRecord[]);
     (currentList as ReciboCajaRecord[]).forEach((rc, idx) => {
-      const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+      const isKilled = isReciboSaldado(rc, invMap);
       ws.addRow({
         rank: idx + 1,
         factura: `${rc.Prefijo_FacturaVenta} ${rc.Numero_FacturaVenta}`.trim(),

@@ -32,6 +32,8 @@ import {
   formatCurrency,
   formatNumber,
   formatPercent,
+  isReciboSaldado,
+  buildInvoiceTotalPaidMap,
 } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 
@@ -263,6 +265,8 @@ export function EvolucionBaseView({
   }, [baseReceivedInvoices, selectedDirector, searchTerm]);
 
   // ─── 4. FACTURAS RECAUDADAS CON RECIBO FILTRADAS DE LA BASE ──────────────────
+  const invoiceTotalPaidMap = useMemo(() => buildInvoiceTotalPaidMap(recibos || []), [recibos]);
+
   const filteredRecaudos = useMemo(() => {
     let list = baseRecaudos;
     if (recaudoScope === 'dia' && selectedCutoff !== fechaBase) {
@@ -1047,7 +1051,7 @@ export function EvolucionBaseView({
                   </tr>
                 ) : (
                   filteredRecaudos.slice(0, 100).map((rc, idx) => {
-                    const isKilled = rc.Valor_Pagado >= rc.Valor_Factura && rc.Valor_Factura > 0;
+                    const isKilled = isReciboSaldado(rc, invoiceTotalPaidMap);
                     return (
                       <tr
                         key={rc.id || `rc-${idx}`}
@@ -1294,9 +1298,17 @@ export function EvolucionBaseView({
                               {formatCurrency(rc.Valor_Pagado)}
                             </td>
                             <td style={{ padding: '9px 14px', textAlign: 'center' }}>
-                              <span className="badge badge-success" style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>
-                                🟢 100% RECAUDADA
-                              </span>
+                              {(() => {
+                                const isRcKilled = isReciboSaldado(rc, invoiceTotalPaidMap);
+                                return (
+                                  <span
+                                    className={`badge ${isRcKilled ? 'badge-success' : 'badge-warning'}`}
+                                    style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px' }}
+                                  >
+                                    {isRcKilled ? '🟢 100% RECAUDADA' : '🟡 ABONO RECIBO'}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding: '9px 14px', color: '#64748B', fontSize: 12 }}>
                               {rc.Fecha_Emision ? rc.Fecha_Emision.split('T')[0] : '—'}

@@ -17,7 +17,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { NotaCreditoRecord } from '../types';
-import { formatCurrency, formatNumber, formatPercent, getAvailableMonths, type MonthOption } from '../lib/carteraApi';
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  formatPrettyDate,
+  getAvailableMonths,
+  type MonthOption,
+} from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
 
 interface Props {
@@ -84,14 +91,28 @@ export function NotasCreditoView({ notas }: Props) {
     return notas;
   }, [notas, datePreset, fechaInicial, fechaFinal, todayStr]);
 
-  // 2. Lista de directores únicos para el select
+  // 2. Conteo de notas para insignias de botones
+  const presetCounts = useMemo(() => {
+    let todayCount = 0;
+    notas.forEach((n) => {
+      const dt = n.Fecha_Emision ? n.Fecha_Emision.split('T')[0] : '';
+      if (dt === todayStr) todayCount++;
+    });
+
+    return {
+      all: notas.length,
+      today: todayCount,
+    };
+  }, [notas, todayStr]);
+
+  // 3. Lista de directores únicos para el select
   const directorsList = useMemo(() => {
     const set = new Set<string>();
     LISTA_DIRECTORES.forEach((d) => set.add(d.nombre));
     return ['Todos', ...Array.from(set).sort()];
   }, []);
 
-  // 3. Filtrado por Director y Buscador
+  // 4. Filtrado por Director y Buscador + Ordenamiento Cronológico (Más recientes primero)
   const filtered = useMemo(() => {
     let list = dateFilteredNotas;
 
@@ -99,20 +120,45 @@ export function NotasCreditoView({ notas }: Props) {
       list = list.filter((n) => (n.directorNombre || '') === selectedDirector);
     }
 
-    if (!search.trim()) return list;
-    const term = search.toLowerCase().trim();
+    if (search.trim()) {
+      const term = search.toLowerCase().trim();
+      list = list.filter(
+        (n) =>
+          n.Empresa.toLowerCase().includes(term) ||
+          n.Identificacion.includes(term) ||
+          String(n.Numero).includes(term) ||
+          String(n.Numero_Factura).includes(term) ||
+          (n.Prefijo || '').toLowerCase().includes(term) ||
+          (n.Nombre_Empleado || '').toLowerCase().includes(term) ||
+          (n.directorNombre || '').toLowerCase().includes(term)
+      );
+    }
 
-    return list.filter(
-      (n) =>
-        n.Empresa.toLowerCase().includes(term) ||
-        n.Identificacion.includes(term) ||
-        String(n.Numero).includes(term) ||
-        String(n.Numero_Factura).includes(term) ||
-        (n.Prefijo || '').toLowerCase().includes(term) ||
-        (n.Nombre_Empleado || '').toLowerCase().includes(term) ||
-        (n.directorNombre || '').toLowerCase().includes(term)
-    );
+    // Ordenar siempre cronológicamente de la más reciente a la más antigua
+    return [...list].sort((a, b) => {
+      const dateA = a.Fecha_Emision || '';
+      const dateB = b.Fecha_Emision || '';
+      if (dateB !== dateA) {
+        return dateB.localeCompare(dateA);
+      }
+      return (b.Numero || 0) - (a.Numero || 0);
+    });
   }, [dateFilteredNotas, selectedDirector, search]);
+
+  // Texto amigable del período actual seleccionado
+  const currentPeriodLabel = useMemo(() => {
+    if (datePreset === 'all') {
+      return `Histórico completo (${filtered.length} notas emitidas, ordenadas por fecha más reciente)`;
+    }
+    if (datePreset === 'today') {
+      return `Notas emitidas hoy (${formatPrettyDate(todayStr)})`;
+    }
+    if (currentSelectedMonthKey) {
+      const opt = monthOptions.find((m) => m.key === currentSelectedMonthKey);
+      return `Mes de ${opt?.label || currentSelectedMonthKey} (${filtered.length} notas)`;
+    }
+    return `Del ${formatPrettyDate(fechaInicial)} al ${formatPrettyDate(fechaFinal)} (${filtered.length} notas)`;
+  }, [datePreset, currentSelectedMonthKey, monthOptions, fechaInicial, fechaFinal, todayStr, filtered.length]);
 
   // 4. Métricas y KPIs globales del dashboard
   const metrics = useMemo(() => {
@@ -241,6 +287,10 @@ export function NotasCreditoView({ notas }: Props) {
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: '#FFFFFF', letterSpacing: '-0.02em' }}>
               Dashboard de Notas Crédito
             </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 12.5, color: '#E9D5FF' }}>
+              <Calendar size={13} />
+              <span>{currentPeriodLabel}</span>
+            </div>
           </div>
         </div>
 
@@ -575,7 +625,7 @@ export function NotasCreditoView({ notas }: Props) {
             title="Notas crédito emitidas hoy"
           >
             <Clock size={13} />
-            Hoy
+            Hoy ({presetCounts.today})
           </button>
 
           {/* 3. SELECTOR DE MES */}
@@ -661,7 +711,7 @@ export function NotasCreditoView({ notas }: Props) {
             <input
               type="date"
               className="date-input-field"
-              value={fechaInicial}
+              value={datePreset === 'all' ? '' : fechaInicial}
               onChange={(e) => {
                 setFechaInicial(e.target.value);
                 setDatePreset('custom');
@@ -683,7 +733,7 @@ export function NotasCreditoView({ notas }: Props) {
             <input
               type="date"
               className="date-input-field"
-              value={fechaFinal}
+              value={datePreset === 'all' ? '' : fechaFinal}
               onChange={(e) => {
                 setFechaFinal(e.target.value);
                 setDatePreset('custom');
@@ -864,8 +914,13 @@ export function NotasCreditoView({ notas }: Props) {
                           <span style={{ color: '#94A3B8', fontSize: 11.5 }}>Ajuste General</span>
                         )}
                       </td>
-                      <td style={{ padding: '10px 16px', color: '#64748B', fontSize: 12 }}>
-                        {nc.Fecha_Emision ? nc.Fecha_Emision.split('T')[0] : '—'}
+                      <td style={{ padding: '10px 16px', fontSize: 12 }}>
+                        <div style={{ fontWeight: 700, color: '#1E293B' }}>
+                          {formatPrettyDate(nc.Fecha_Emision)}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>
+                          {nc.Fecha_Emision ? nc.Fecha_Emision.split('T')[0] : '—'}
+                        </div>
                       </td>
                       <td style={{ padding: '10px 16px', fontWeight: 600, color: '#1E293B' }}>
                         {nc.Empresa}
