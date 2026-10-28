@@ -101,7 +101,7 @@ function ViewSkeleton() {
   );
 }
 
-type ViewMode = 'evolucion' | 'gestion' | 'dashboard' | 'facturas' | 'grupos' | 'recibos' | 'notas' | 'clientes';
+type ViewMode = 'gestion' | 'evolucion' | 'facturas' | 'grupos' | 'recibos' | 'notas' | 'clientes';
 
 const AGING_ORDER: AgeBucketKey[] = [
   'CORRIENTE',
@@ -159,14 +159,14 @@ function SelectFilter({
 const getInitialView = (): ViewMode => {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash.replace('#', '') as ViewMode;
-    const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
+    const validViews: ViewMode[] = ['gestion', 'evolucion', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
     if (validViews.includes(hash)) return hash;
     try {
       const saved = sessionStorage.getItem('cartera_view') as ViewMode;
       if (validViews.includes(saved)) return saved;
     } catch (_) {}
   }
-  return 'dashboard';
+  return 'gestion';
 };
 
 export function App() {
@@ -199,7 +199,7 @@ export function App() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '') as ViewMode;
-      const validViews: ViewMode[] = ['evolucion', 'gestion', 'dashboard', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
+      const validViews: ViewMode[] = ['gestion', 'evolucion', 'facturas', 'grupos', 'recibos', 'notas', 'clientes'];
       if (validViews.includes(hash)) {
         setViewRaw(hash);
       }
@@ -582,7 +582,7 @@ export function App() {
   const isDedicatedAuxView = view === 'recibos' || view === 'notas' || view === 'clientes';
   const isCohortView = view === 'evolucion' || view === 'gestion';
   const showHeroBanner = !isDedicatedAuxView;
-  const showCarteraDateBar = view === 'dashboard' || view === 'facturas' || view === 'grupos';
+  const showCarteraDateBar = view === 'facturas' || view === 'grupos';
   const showCarteraFilterBar = !isDedicatedAuxView;
 
   // Conteo de filtros activos contextuales por pestaña
@@ -593,16 +593,16 @@ export function App() {
     if (selectedGrupo !== 'all') count++;
     if (selectedDirector !== 'all') count++;
 
-    if (view === 'dashboard' || view === 'facturas' || isCohortView) {
+    if (view === 'facturas' || isCohortView) {
       if (selectedExecutive !== 'all') count++;
     }
 
-    if (view === 'dashboard' || view === 'facturas') {
+    if (view === 'facturas') {
       if (selectedEstado !== 'all') count++;
       if (onlyOverdue) count++;
     }
 
-    if (view === 'dashboard' || view === 'facturas' || view === 'grupos') {
+    if (view === 'facturas' || view === 'grupos') {
       if (selectedAging !== 'all') count++;
       if (datePreset !== 'all') count++;
     }
@@ -625,11 +625,11 @@ export function App() {
     setSelectedGrupo('all');
     setSelectedDirector('all');
     setSelectedExecutive('all');
-    if (view === 'dashboard' || view === 'facturas' || view === 'grupos') {
+    if (view === 'facturas' || view === 'grupos') {
       setSelectedAging('all');
       handleSelectPreset('all');
     }
-    if (view === 'dashboard' || view === 'facturas') {
+    if (view === 'facturas') {
       setSelectedEstado('all');
       setOnlyOverdue(false);
     }
@@ -763,19 +763,9 @@ export function App() {
           <nav className="segmented-nav" aria-label="Vistas del sistema" style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
             <button
               type="button"
-              className={view === 'evolucion' ? 'active' : ''}
-              onClick={() => setView('evolucion')}
-              title="Seguimiento exclusivo a la cartera recibida al 06/10/2026 (Base fija entregada)"
-            >
-              <TrendingUp size={15} />
-              <span>Evolución (Base 06/10)</span>
-            </button>
-
-            <button
-              type="button"
               className={view === 'gestion' ? 'active' : ''}
               onClick={() => setView('gestion')}
-              title="Gestión operativa día a día del proceso (Facturas recaudadas con recibo y nuevas emisiones)"
+              title="Gestión operativa día a día del proceso (Cartera activa en vivo, recaudos y nuevas emisiones)"
             >
               <CalendarRange size={15} />
               <span>Gestión Día a Día</span>
@@ -784,12 +774,12 @@ export function App() {
 
             <button
               type="button"
-              className={view === 'dashboard' ? 'active' : ''}
-              onClick={() => setView('dashboard')}
-              title="Resumen ejecutivo y edades de cartera"
+              className={view === 'evolucion' ? 'active' : ''}
+              onClick={() => setView('evolucion')}
+              title="Seguimiento exclusivo a la cartera recibida al 06/10/2026 (Base fija entregada)"
             >
-              <LayoutDashboard size={15} />
-              <span>Tablero & Edades</span>
+              <TrendingUp size={15} />
+              <span>Evolución (Base 06/10)</span>
             </button>
 
             <button
@@ -941,8 +931,6 @@ export function App() {
                   ? 'Evolución de la Base Inicial (06/10)'
                   : view === 'gestion'
                   ? 'Gestión de Cartera Día a Día (Seguimiento del Proceso)'
-                  : view === 'dashboard'
-                  ? 'Tablero General de Edades'
                   : view === 'facturas'
                   ? 'Detalle de Facturas y Saldos'
                   : 'Grupos Comerciales y Directores'}
@@ -952,8 +940,6 @@ export function App() {
                   ? 'Desmonte exclusivo de la cartera recibida al 06 de octubre de 2026. Seguimiento a la base inicial entregada al equipo comercial.'
                   : view === 'gestion'
                   ? 'Operación diaria del proceso: facturas recaudadas por Recibos de Caja, abonos y nuevas facturas emitidas.'
-                  : view === 'dashboard'
-                  ? 'Panorama consolidado por edades de vencimiento: Corriente, 1-30, 31-60, 61-90, 91-120, 121-180 y +180 días.'
                   : view === 'facturas'
                   ? 'Lista detallada de facturas abiertas con saldos, días de mora, estado y exportación a Excel.'
                   : 'Supervisión consolidada por grupos comerciales, directores y ejecutivos de cuenta.'}
@@ -1062,7 +1048,7 @@ export function App() {
               ]}
             />
 
-            {(view === 'dashboard' || view === 'facturas' || isCohortView) && (
+            {(view === 'facturas' || isCohortView) && (
               <SelectFilter
                 label="Ejecutivo / Vendedor"
                 value={selectedExecutive}
@@ -1077,7 +1063,7 @@ export function App() {
               />
             )}
 
-            {(view === 'dashboard' || view === 'facturas') && (
+            {view === 'facturas' && (
               <SelectFilter
                 label="Estado Cliente"
                 value={selectedEstado}
@@ -1091,7 +1077,7 @@ export function App() {
               />
             )}
 
-            {(view === 'dashboard' || view === 'facturas' || view === 'grupos') && (
+            {(view === 'facturas' || view === 'grupos') && (
               <SelectFilter
                 label="Antigüedad / Días"
                 value={selectedAging}
@@ -1110,7 +1096,7 @@ export function App() {
             )}
 
             <div className="filter-actions-group">
-              {(view === 'dashboard' || view === 'facturas') && (
+              {view === 'facturas' && (
                 <button
                   type="button"
                   className={`filter-pill-chip ${onlyOverdue ? 'active-danger' : ''}`}
@@ -1140,82 +1126,7 @@ export function App() {
         {/* 4. CONTENIDO SEGÚN LA VISTA SELECCIONADA */}
         {carteraData && filteredMetrics && (
           <Suspense fallback={<ViewSkeleton />}>
-            {/* VISTA 1: TABLERO & EDADES (REACTIVO CON filteredMetrics) */}
-            {view === 'dashboard' && (
-              <>
-                <AgingCards
-                  totalSaldo={filteredMetrics.totalSaldo}
-                  totalCorriente={filteredMetrics.totalCorriente}
-                  totalVencido={filteredMetrics.totalVencido}
-                  porcentajeVencido={filteredMetrics.porcentajeVencido}
-                  totalDocumentos={filteredMetrics.totalDocumentos}
-                  clientesUnicos={filteredMetrics.clientesUnicos}
-                  agingItems={filteredMetrics.agingItems}
-                  selectedAging={selectedAging}
-                  onSelectAging={setSelectedAging}
-                />
-
-                <ActividadDelDiaWidget
-                  records={filteredRecords}
-                  recibos={cohortRecibos}
-                  fechaCorte={fechaFinal}
-                  fechaBase="2026-10-06"
-                  onNavigateToGestion={() => setView('gestion')}
-                  onNavigateToRecibos={() => setView('recibos')}
-                  onSelectRecord={setSelectedInvoice}
-                />
-
-                <CarteraCharts
-                  records={filteredRecords}
-                  agingItems={filteredMetrics.agingItems}
-                  groups={filteredMetrics.groups}
-                  customers={filteredMetrics.customers}
-                  executives={filteredMetrics.executives}
-                  selectedAging={selectedAging}
-                  onSelectAging={setSelectedAging}
-                  selectedExecutive={selectedExecutive}
-                  onSelectExecutive={setSelectedExecutive}
-                  selectedDirector={selectedDirector}
-                  onSelectDirector={setSelectedDirector}
-                  onSelectRecord={setSelectedInvoice}
-                  onViewFullTable={() => setView('facturas')}
-                />
-
-                <div className="dashboard-subtable-section" style={{ marginTop: 24 }}>
-                  <div className="subtable-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 750 }}>
-                      Facturas Filtradas ({formatNumber(filteredRecords.length)})
-                    </h3>
-                    <button
-                      type="button"
-                      className="button button-sm button-secondary"
-                      onClick={() => setView('facturas')}
-                    >
-                      Ver Tabla Completa
-                    </button>
-                  </div>
-                  <CarteraTable
-                    records={filteredRecords}
-                    onSelectRecord={setSelectedInvoice}
-                    onExportExcel={handleExportExcel}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* VISTA 1: EVOLUCIÓN DE LA BASE INICIAL (CORTE 06/10) */}
-            {view === 'evolucion' && (
-              <EvolucionBaseView
-                records={cohortRecords}
-                recibos={cohortRecibos}
-                fechaBase="2026-10-06"
-                selectedDirectorProp={selectedDirector}
-                onSelectRecord={setSelectedInvoice}
-                onNavigateToGestion={() => setView('gestion')}
-              />
-            )}
-
-            {/* VISTA 2: GESTIÓN OPERATIVA DÍA A DÍA (DESDE 07/10) */}
+            {/* VISTA 1: GESTIÓN OPERATIVA DÍA A DÍA (DESDE 07/10 - EN VIVO) */}
             {view === 'gestion' && (
               <GestionDiaADiaView
                 records={cohortRecords}
@@ -1226,6 +1137,22 @@ export function App() {
                 onSync={() => loadData(true, true)}
                 isLoading={refreshing}
                 onNavigateToEvolucion={() => setView('evolucion')}
+                onViewFullTable={() => setView('facturas')}
+                onSelectDirector={(dir) => setSelectedDirector(dir)}
+              />
+            )}
+
+            {/* VISTA 2: EVOLUCIÓN DE LA BASE INICIAL (CORTE 06/10) */}
+            {view === 'evolucion' && (
+              <EvolucionBaseView
+                records={cohortRecords}
+                recibos={cohortRecibos}
+                fechaBase="2026-10-06"
+                selectedDirectorProp={selectedDirector}
+                onSelectRecord={setSelectedInvoice}
+                onNavigateToGestion={() => setView('gestion')}
+                onViewFullTable={() => setView('facturas')}
+                onSelectDirector={(dir) => setSelectedDirector(dir)}
               />
             )}
 

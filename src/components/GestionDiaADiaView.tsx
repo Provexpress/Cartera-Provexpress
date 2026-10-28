@@ -41,8 +41,11 @@ import {
   formatPercent,
   isReciboSaldado,
   buildInvoiceTotalPaidMap,
+  computeCarteraMetrics,
 } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
+import { AgingCards } from './AgingCards';
+import { CarteraCharts } from './CarteraCharts';
 
 interface Props {
   records: CarteraRecord[];
@@ -53,6 +56,8 @@ interface Props {
   onSync?: () => Promise<void>;
   isLoading?: boolean;
   onNavigateToEvolucion?: () => void;
+  onViewFullTable?: () => void;
+  onSelectDirector?: (dir: string | 'all') => void;
 }
 
 interface CohortPoint {
@@ -99,6 +104,8 @@ export function GestionDiaADiaView({
   onSync,
   isLoading = false,
   onNavigateToEvolucion,
+  onViewFullTable,
+  onSelectDirector,
 }: Props) {
   // ─── 1. CÁLCULO DE LA LÍNEA BASE INICIAL Y DESMONTE CORTE A CORTE ─────────
   // Todas las facturas cuya emisión fue <= fechaBase formaban la cartera al arrancar la gestión
@@ -183,6 +190,7 @@ export function GestionDiaADiaView({
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDesmonteAging, setSelectedDesmonteAging] = useState<string>('all');
+  const [selectedActiveAging, setSelectedActiveAging] = useState<AgeBucketKey | 'CRITICO_30' | 'all'>('all');
 
   useEffect(() => {
     if (selectedDirectorProp) {
@@ -336,6 +344,14 @@ export function GestionDiaADiaView({
     vivasList.forEach((r) => set.add(r.Identificacion || r.Empresa));
     return set.size;
   }, [vivasList]);
+
+  // Métricas completas de edades y agrupaciones de la cartera viva en tiempo real
+  const activeMetrics = useMemo(() => {
+    const listForMetrics = selectedDirector !== 'Todos'
+      ? vivasList.filter((r) => (r.directorNombre || '') === selectedDirector)
+      : vivasList;
+    return computeCarteraMetrics(listForMetrics);
+  }, [vivasList, selectedDirector]);
 
   // ─── DESMONTE POR EDADES (COMPOSICIÓN DEL TOTAL QUE HA BAJADO) ───
   // ¿De qué edades de cartera eran las facturas recaudadas? (Estilo Remisiones)
@@ -525,6 +541,15 @@ export function GestionDiaADiaView({
       });
     }
 
+    // Filtro por edad de cartera viva seleccionada
+    if (activeTab === 'vivas' && selectedActiveAging !== 'all') {
+      if (selectedActiveAging === 'CRITICO_30') {
+        list = (list as CarteraRecord[]).filter((r) => r.categoriaEdad !== 'CORRIENTE' && r.categoriaEdad !== '1_30');
+      } else {
+        list = (list as CarteraRecord[]).filter((r) => r.categoriaEdad === selectedActiveAging);
+      }
+    }
+
     if (!searchTerm.trim()) return list;
     const q = searchTerm.toLowerCase().trim();
 
@@ -549,7 +574,7 @@ export function GestionDiaADiaView({
         r.Nombre_Empleado?.toLowerCase().includes(q) ||
         r.directorNombre?.toLowerCase().includes(q)
     );
-  }, [activeTab, salientesList, entrantesList, vivasList, selectedDirector, selectedDesmonteAging, searchTerm, records]);
+  }, [activeTab, salientesList, entrantesList, vivasList, selectedDirector, selectedDesmonteAging, selectedActiveAging, searchTerm, records]);
 
   // Exportar a Excel con formato y estética de Remisiones
   const handleExportExcel = async () => {
@@ -1417,8 +1442,50 @@ export function GestionDiaADiaView({
           </div>
         </div>
 
-        {/* 2.3 Barra de Controles: Selector de Pestaña + Filtro Director + Buscador + Excel */}
+        {/* 2.3 DIAGNÓSTICO DE EDADES Y GRÁFICAS DE LA CARTERA VIVA (EN VIVO ERP) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 20 }}>
+          <AgingCards
+            totalSaldo={activeMetrics.totalSaldo}
+            totalCorriente={activeMetrics.totalCorriente}
+            totalVencido={activeMetrics.totalVencido}
+            porcentajeVencido={activeMetrics.porcentajeVencido}
+            totalDocumentos={activeMetrics.totalDocumentos}
+            clientesUnicos={activeMetrics.clientesUnicos}
+            agingItems={activeMetrics.agingBreakdown}
+            selectedAging={selectedActiveAging}
+            onSelectAging={(key) => {
+              setSelectedActiveAging(key);
+              setActiveTab('vivas');
+              document.getElementById('monitor-operativo-tabla')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
+
+          <CarteraCharts
+            records={vivasList}
+            agingItems={activeMetrics.agingBreakdown}
+            groups={activeMetrics.groupsSummary}
+            customers={activeMetrics.customersSummary}
+            executives={activeMetrics.executivesSummary}
+            selectedAging={selectedActiveAging}
+            onSelectAging={(key) => {
+              setSelectedActiveAging(key);
+              setActiveTab('vivas');
+              document.getElementById('monitor-operativo-tabla')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            selectedDirector={selectedDirector}
+            onSelectDirector={(dir) => {
+              const newDir = dir || 'Todos';
+              setSelectedDirector(newDir);
+              if (onSelectDirector) onSelectDirector(dir || 'all');
+            }}
+            onSelectRecord={onSelectRecord}
+            onViewFullTable={onViewFullTable}
+          />
+        </div>
+
+        {/* 2.4 Barra de Controles: Selector de Pestaña + Filtro Director + Buscador + Excel */}
         <div
+          id="monitor-operativo-tabla"
           style={{
             display: 'flex',
             justifyContent: 'space-between',

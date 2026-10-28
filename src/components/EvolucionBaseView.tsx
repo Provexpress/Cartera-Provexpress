@@ -27,7 +27,7 @@ import {
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
-import type { CarteraRecord, ReciboCajaRecord } from '../types';
+import type { CarteraRecord, ReciboCajaRecord, AgeBucketKey } from '../types';
 import {
   formatCompactCurrency,
   formatCurrency,
@@ -35,8 +35,11 @@ import {
   formatPercent,
   isReciboSaldado,
   buildInvoiceTotalPaidMap,
+  computeCarteraMetrics,
 } from '../lib/carteraApi';
 import { LISTA_DIRECTORES } from '../lib/commercialDirectory';
+import { AgingCards } from './AgingCards';
+import { CarteraCharts } from './CarteraCharts';
 
 interface Props {
   records: CarteraRecord[];
@@ -45,6 +48,8 @@ interface Props {
   selectedDirectorProp?: string;
   onSelectRecord?: (record: CarteraRecord) => void;
   onNavigateToGestion?: () => void;
+  onViewFullTable?: () => void;
+  onSelectDirector?: (dir: string | 'all') => void;
 }
 
 interface CohortPoint {
@@ -87,6 +92,8 @@ export function EvolucionBaseView({
   selectedDirectorProp,
   onSelectRecord,
   onNavigateToGestion,
+  onViewFullTable,
+  onSelectDirector,
 }: Props) {
   // Estado de filtros y perspectiva
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'killed'>('open');
@@ -95,6 +102,7 @@ export function EvolucionBaseView({
   const [selectedDirector, setSelectedDirector] = useState<string>(
     selectedDirectorProp && selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos'
   );
+  const [selectedBaseAging, setSelectedBaseAging] = useState<AgeBucketKey | 'CRITICO_30' | 'all'>('all');
   const [reciboDateCriterion, setReciboDateCriterion] = useState<'fecha_recibo' | 'fecha_recaudo'>('fecha_recibo');
   const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
   const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -249,6 +257,13 @@ export function EvolucionBaseView({
     if (selectedDirector !== 'Todos') {
       list = list.filter((r) => (r.directorNombre || '') === selectedDirector);
     }
+    if (selectedBaseAging !== 'all') {
+      if (selectedBaseAging === 'CRITICO_30') {
+        list = list.filter((r) => r.categoriaEdad !== 'CORRIENTE' && r.categoriaEdad !== '1_30');
+      } else {
+        list = list.filter((r) => r.categoriaEdad === selectedBaseAging);
+      }
+    }
     if (!searchTerm.trim()) return list;
     const q = searchTerm.toLowerCase().trim();
     return list.filter(
@@ -260,7 +275,15 @@ export function EvolucionBaseView({
         r.Nombre_Empleado?.toLowerCase().includes(q) ||
         r.directorNombre?.toLowerCase().includes(q)
     );
-  }, [baseReceivedInvoices, selectedDirector, searchTerm]);
+  }, [baseReceivedInvoices, selectedDirector, selectedBaseAging, searchTerm]);
+
+  // Métricas completas de edades y concentración de la base inicial entregada (06/10)
+  const baseMetrics = useMemo(() => {
+    const listForMetrics = selectedDirector !== 'Todos'
+      ? baseReceivedInvoices.filter((r) => (r.directorNombre || '') === selectedDirector)
+      : baseReceivedInvoices;
+    return computeCarteraMetrics(listForMetrics);
+  }, [baseReceivedInvoices, selectedDirector]);
 
   // ─── 4. FACTURAS RECAUDADAS CON RECIBO FILTRADAS DE LA BASE ──────────────────
   const invoiceTotalPaidMap = useMemo(() => buildInvoiceTotalPaidMap(recibos || []), [recibos]);
@@ -849,6 +872,50 @@ export function EvolucionBaseView({
             );
           })}
         </div>
+      </div>
+
+      {/* ─── DIAGNÓSTICO DE EDADES Y GRÁFICAS DE LA BASE INICIAL (CORTE 06/10) ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <AgingCards
+          totalSaldo={baseMetrics.totalSaldo}
+          totalCorriente={baseMetrics.totalCorriente}
+          totalVencido={baseMetrics.totalVencido}
+          porcentajeVencido={baseMetrics.porcentajeVencido}
+          totalDocumentos={baseMetrics.totalDocumentos}
+          clientesUnicos={baseMetrics.clientesUnicos}
+          agingItems={baseMetrics.agingBreakdown}
+          selectedAging={selectedBaseAging}
+          onSelectAging={(key) => {
+            setSelectedBaseAging(key);
+            setStatusFilter('open');
+            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+        />
+
+        <CarteraCharts
+          records={baseReceivedInvoices}
+          agingItems={baseMetrics.agingBreakdown}
+          groups={baseMetrics.groupsSummary}
+          customers={baseMetrics.customersSummary}
+          executives={baseMetrics.executivesSummary}
+          selectedAging={selectedBaseAging}
+          onSelectAging={(key) => {
+            setSelectedBaseAging(key);
+            setStatusFilter('open');
+            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          selectedDirector={selectedDirector}
+          onSelectDirector={(dir) => {
+            const newDir = dir || 'Todos';
+            setSelectedDirector(newDir);
+            if (onSelectDirector) onSelectDirector(dir || 'all');
+          }}
+          onSelectRecord={onSelectRecord}
+          onViewFullTable={() => {
+            setStatusFilter('open');
+            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+        />
       </div>
 
       {/* ─── SECCIÓN 2: AUDITORÍA DE FACTURAS DE LA BASE INICIAL ─── */}
