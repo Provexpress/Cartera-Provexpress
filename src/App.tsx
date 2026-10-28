@@ -244,16 +244,21 @@ export function App() {
     setError(null);
 
     try {
-      // Determinamos el rango de consulta inicial para el ERP.
-      // Consultamos desde el 01 de septiembre de 2026 hasta hoy para tener en memoria
-      // tanto el mes anterior completo como el mes actual y todos los recaudos/notas.
+      // Determinamos el rango de consulta inicial para el ERP dinámicamente.
+      // Consultamos desde el primer día del mes anterior hasta hoy para tener en memoria
+      // tanto el mes anterior completo como el mes actual y todos los recaudos/notas en tiempo real.
       const now = new Date();
       const y = now.getFullYear();
       const m = String(now.getMonth() + 1).padStart(2, '0');
       const d = String(now.getDate()).padStart(2, '0');
       const todayStr = `${y}-${m}-${d}`;
 
-      let queryInit = '2026-09-01';
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevY = prevMonth.getFullYear();
+      const prevM = String(prevMonth.getMonth() + 1).padStart(2, '0');
+      const defaultQueryInit = `${prevY}-${prevM}-01`;
+
+      let queryInit = defaultQueryInit;
       let queryEnd = todayStr;
 
       // Si el usuario especificó un rango custom específico en los inputs, lo consultamos al refrescar
@@ -279,6 +284,15 @@ export function App() {
       void loadData();
     }
   }, [user]);
+
+  // Auto-refresco en segundo plano en tiempo real cada 2 minutos (sin interrumpir la interfaz)
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      void loadData(true, true);
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, datePreset, fechaInicial, fechaFinal]);
 
   // Manejo de cambio de Presets de Fecha
   const handleSelectPreset = (preset: DatePreset) => {

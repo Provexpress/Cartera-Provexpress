@@ -563,10 +563,22 @@ export function DateControlBar({
             onClick={onRefreshERP}
             disabled={refreshing}
             title="Consultar ERP en tiempo real para traer últimas facturas y recaudos"
-            style={{ fontWeight: 600 }}
+            style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7 }}
           >
             <RefreshCw size={13} className={refreshing ? 'spinner' : ''} />
             <span>{refreshing ? 'Sincronizando…' : 'Actualizar ERP'}</span>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                backgroundColor: refreshing ? '#F59E0B' : '#10B981',
+                boxShadow: refreshing ? '0 0 6px #F59E0B' : '0 0 6px #10B981',
+                transition: 'all 0.2s ease',
+              }}
+              title={refreshing ? 'Sincronizando con ERP...' : 'Conexión ERP en vivo y en tiempo real activa'}
+            />
           </button>
         </div>
       </div>

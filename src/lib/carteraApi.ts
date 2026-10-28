@@ -502,7 +502,7 @@ interface CarteraCacheEntry {
 }
 
 const carteraMemoryCache = new Map<string, CarteraCacheEntry>();
-const CARTERA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const CARTERA_CACHE_TTL_MS = 60 * 1000; // 1 minuto (máxima frescura en tiempo real)
 
 /**
  * Invalida el caché en memoria de consultas ERP
@@ -513,7 +513,8 @@ export function clearCarteraCache(): void {
 
 /**
  * Obtiene la Fecha del Recibo (día en que se elaboró / digitó en SISGerente),
- * diferenciándola de Fecha_Recaudo (día en que entró el dinero al banco / consignación).
+ * diferenciándola de Fecha_Recaudo (día en que entró el dinero al banco / consignación)
+ * de forma dinámica y en tiempo real.
  */
 export function getFechaRecibo(r: any): string {
   // 1. Si el API devuelve explícitamente Fecha_Recibo, Fecha_Documento o Fecha_Creacion
@@ -521,20 +522,7 @@ export function getFechaRecibo(r: any): string {
   if (r.Fecha_Documento) return r.Fecha_Documento.split('T')[0];
   if (r.Fecha_Creacion) return r.Fecha_Creacion.split('T')[0];
 
-  const num = Number(r.Numero_ReciboCaja) || 0;
-  // 2. Mapeo cronológico de los rangos correlativos estrictos de recibos en SISGerente
-  if (num >= 99807) return '2026-10-20';
-  if (num >= 99708) return '2026-10-19';
-  if (num >= 99615) return '2026-10-16';
-  if (num >= 99566) return '2026-10-15';
-  if (num >= 99521) return '2026-10-14';
-  if (num >= 99434) return '2026-10-13';
-  if (num >= 99374) return '2026-10-09';
-  if (num >= 99327) return '2026-10-08';
-  if (num >= 99286) return '2026-10-07';
-  if (num >= 99252) return '2026-10-06';
-
-  // 3. Fallback a Fecha_Recaudo
+  // 2. Fecha asentada en el ERP (tiempo real sin topes artificiales)
   return r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '';
 }
 

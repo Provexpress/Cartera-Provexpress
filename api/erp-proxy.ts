@@ -62,6 +62,7 @@ export default async function handler(req: any, res: any) {
 
     res.status(response.status);
     res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.send(data);
   } catch (error: any) {
     console.error('Error en erp-proxy hacia', targetUrl, error);
