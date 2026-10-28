@@ -26,6 +26,8 @@ import {
   Building2,
   AlertTriangle,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { CarteraRecord, ReciboCajaRecord, AgeBucketKey } from '../types';
 import {
@@ -106,6 +108,7 @@ export function EvolucionBaseView({
   const [reciboDateCriterion, setReciboDateCriterion] = useState<'fecha_recibo' | 'fecha_recaudo'>('fecha_recibo');
   const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isDayCardsExpanded, setIsDayCardsExpanded] = useState(false);
 
   useEffect(() => {
     if (selectedDirectorProp) {
@@ -761,9 +764,53 @@ export function EvolucionBaseView({
           </ResponsiveContainer>
         </div>
 
-        {/* 1.3 Tarjetas Día a Día (Seguimiento Cronológico) */}
+        {/* 1.3 Tarjetas Día a Día (Seguimiento Cronológico) Desplegable */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '4px 2px', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+              Tarjetas de Seguimiento Diario ({cohortSeries.length} fechas)
+            </span>
+            <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+              {isDayCardsExpanded ? `Mostrando todas las ${cohortSeries.length} fechas` : `Mostrando fecha activa (${formatCutoffText(selectedCutoff)})`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsDayCardsExpanded(!isDayCardsExpanded)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '12px',
+              fontWeight: 600,
+              padding: '6px 14px',
+              borderRadius: 8,
+              background: isDayCardsExpanded ? '#f1f5f9' : '#eff6ff',
+              color: isDayCardsExpanded ? '#475569' : '#1d4ed8',
+              border: `1px solid ${isDayCardsExpanded ? '#cbd5e1' : '#bfdbfe'}`,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {isDayCardsExpanded ? (
+              <>
+                <ChevronUp size={15} /> Colapsar historial a 1 día
+              </>
+            ) : (
+              <>
+                <ChevronDown size={15} /> Desplegar todas las fechas ({cohortSeries.length})
+              </>
+            )}
+          </button>
+        </div>
+
         <div className="mgmt-day-cards-list">
-          {cohortSeries.map((pt) => {
+          {(isDayCardsExpanded
+            ? cohortSeries
+            : cohortSeries.filter((pt) => pt.cutoff === selectedCutoff).length > 0
+              ? cohortSeries.filter((pt) => pt.cutoff === selectedCutoff)
+              : cohortSeries.slice(-1)
+          ).map((pt) => {
             const isSelected = pt.cutoff === selectedCutoff;
             const isInitial = pt.cutoff === initialPoint.cutoff;
             const isToday = pt.cutoff === todayStr;
@@ -872,6 +919,53 @@ export function EvolucionBaseView({
             );
           })}
         </div>
+
+        {/* Botón inferior para colapsar o expandir según estado */}
+        {!isDayCardsExpanded ? (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => setIsDayCardsExpanded(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#2563eb',
+                background: '#f8fafc',
+                border: '1px dashed #93c5fd',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              <ChevronDown size={15} /> Desplegar historial completo ({cohortSeries.length} fechas)
+            </button>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={() => setIsDayCardsExpanded(false)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#475569',
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              <ChevronUp size={15} /> Colapsar historial día a día ▲
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ─── DIAGNÓSTICO DE EDADES Y GRÁFICAS DE LA BASE INICIAL (CORTE 06/10) ─── */}
