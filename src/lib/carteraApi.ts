@@ -895,8 +895,9 @@ export function isReciboSaldado(
   // 3. Redondeo entero sin centavos (ej: $1.178.032 pagados vs $1.178.032,17 facturados)
   if (Math.round(vp) >= Math.round(vf)) return true;
 
-  // 4. Margen de tolerancia bancaria/centavos (diferencia <= 50 pesos o >= 99.5% liquidado)
-  if (vf - vp <= 50 || (vf > 0 && vp / vf >= 0.995)) return true;
+  // 4. Margen de tolerancia bancaria / retenciones comerciales legales (ReteFuente + ReteICA + ReteIVA)
+  // En Colombia, retenciones de 2.5% a 11% reducen el desembolso neto pero liquidan la factura 100%
+  if (vf - vp <= 1000 || (vf > 0 && vp / vf >= 0.88)) return true;
 
   // 5. Verificación por acumulación de múltiples recibos que liquidan la factura
   if (invoiceTotalPaidMap) {
@@ -905,7 +906,7 @@ export function isReciboSaldado(
       const prefijo = String(rc.Prefijo_FacturaVenta || 'FVE').trim().toUpperCase();
       const key = `${prefijo}-${num}`;
       const totalPaid = Math.abs(invoiceTotalPaidMap.get(key) || 0);
-      if (totalPaid >= vf - 50 || (vf > 0 && totalPaid / vf >= 0.995)) return true;
+      if (totalPaid >= vf - 1000 || (vf > 0 && totalPaid / vf >= 0.88)) return true;
     }
   }
 

@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   Building2,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import type { CarteraRecord, ReciboCajaRecord } from '../types';
 import {
@@ -87,18 +88,16 @@ export function EvolucionBaseView({
   onSelectRecord,
   onNavigateToGestion,
 }: Props) {
-  const [selectedCutoff, setSelectedCutoff] = useState<string>(fechaBase);
-  const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
-  const [reciboDateCriterion, setReciboDateCriterion] = useState<'fecha_recibo' | 'fecha_recaudo'>('fecha_recibo');
-  const [isExportingExcel, setIsExportingExcel] = useState(false);
-
-  // Subfiltro de la tabla de la cohorte
+  // Estado de filtros y perspectiva
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'killed'>('open');
   const [recaudoScope, setRecaudoScope] = useState<'acumulado' | 'dia'>('acumulado');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDirector, setSelectedDirector] = useState<string>(
     selectedDirectorProp && selectedDirectorProp !== 'all' ? selectedDirectorProp : 'Todos'
   );
+  const [reciboDateCriterion, setReciboDateCriterion] = useState<'fecha_recibo' | 'fecha_recaudo'>('fecha_recibo');
+  const [chartMode, setChartMode] = useState<'both' | 'money' | 'docs'>('both');
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   useEffect(() => {
     if (selectedDirectorProp) {
@@ -115,7 +114,6 @@ export function EvolucionBaseView({
   }, [records, fechaBase]);
 
   // ─── 2. RECAUDOS DE CAJA ASOCIADOS A LA BASE INICIAL ───────────────────────
-  // Recaudos de facturas emitidas en o antes de la fecha base recibidos desde fechaBase en adelante
   const baseRecaudos = useMemo(() => {
     return recibos.filter((rc) => {
       const fechaRec = rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '';
@@ -127,18 +125,6 @@ export function EvolucionBaseView({
   }, [recibos, fechaBase]);
 
   const recibosRelevantes = baseRecaudos;
-
-  // Identificar qué facturas de la base ya tienen recibos que las matan o abonan
-  const invoiceRecibosMap = useMemo(() => {
-    const map = new Map<string, ReciboCajaRecord[]>();
-    recibos.forEach((rc) => {
-      const key = `${rc.Prefijo_FacturaVenta}-${rc.Numero_FacturaVenta}`.trim().toLowerCase();
-      const list = map.get(key) || [];
-      list.push(rc);
-      map.set(key, list);
-    });
-    return map;
-  }, [recibos]);
 
   // Fecha de hoy formateada
   const todayStr = useMemo(() => {
@@ -174,6 +160,17 @@ export function EvolucionBaseView({
 
     return Array.from(datesSet).sort();
   }, [fechaBase, todayStr, recibosRelevantes, reciboDateCriterion]);
+
+  // Corte más reciente (idéntico a Remisiones: por defecto hoy o último día)
+  const latestCutoffDate = cohortDates.length ? cohortDates[cohortDates.length - 1] : todayStr;
+  const [selectedCutoff, setSelectedCutoff] = useState<string>(latestCutoffDate);
+
+  // Mantener actualizado al corte más reciente al iniciar o si cohortDates cambia
+  useEffect(() => {
+    if (latestCutoffDate && selectedCutoff === fechaBase && latestCutoffDate !== fechaBase) {
+      setSelectedCutoff(latestCutoffDate);
+    }
+  }, [latestCutoffDate, selectedCutoff, fechaBase]);
 
   // Construcción de la Serie de Desmonte (Idéntico a Remisiones)
   const cohortSeries: CohortPoint[] = useMemo(() => {
@@ -226,7 +223,7 @@ export function EvolucionBaseView({
         dailyDeltaPct,
       };
     });
-  }, [cohortDates, baseReceivedInvoices, recibosRelevantes]);
+  }, [cohortDates, baseReceivedInvoices, recibosRelevantes, reciboDateCriterion]);
 
   const initialPoint = cohortSeries[0] || {
     cutoff: fechaBase,
@@ -244,6 +241,7 @@ export function EvolucionBaseView({
   };
 
   const latestPoint = cohortSeries[cohortSeries.length - 1] || initialPoint;
+  const currentCohortPoint = cohortSeries.find((c) => c.cutoff === selectedCutoff) || latestPoint;
 
   // ─── 3. FACTURAS ABIERTAS FILTRADAS DE LA BASE ──────────────────────────────
   const filteredOpenInvoices = useMemo(() => {
@@ -367,52 +365,49 @@ export function EvolucionBaseView({
               </strong>
             </div>
             <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6B21A8' }}>
-              Seguimiento exclusivo al desmonte de las <strong>{formatNumber(baseReceivedInvoices.length)} facturas</strong> entregadas para gestión de cobro ({formatCurrency(latestPoint.initialPending)}). No ingresa facturación nueva a esta base.
+              Seguimiento exclusivo al desmonte de las <strong>{formatNumber(baseReceivedInvoices.length)} facturas</strong> entregadas para gestión de cobro ({formatCurrency(initialPoint.initialPending)}). No ingresa facturación nueva a esta base.
             </p>
-            {lastReciboDate && lastReciboDate < todayStr && (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #d8b4fe',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: '#6b21a8',
-                  fontWeight: 600,
-                  marginTop: 6,
-                }}
-              >
-                <Clock size={13} color="#9333ea" />
-                <span>
-                  Últimos recibos registrados en SISGerente: <strong>{formatCutoffText(lastReciboDate)}</strong> (6 recibos). Días 18, 19 y 20 sin nuevos recibos asentados en el ERP.
-                </span>
-              </div>
-            )}
           </div>
         </div>
 
-        {onNavigateToGestion && (
-          <button
-            type="button"
-            className="button button-sm button-primary"
-            onClick={onNavigateToGestion}
-            style={{
-              backgroundColor: '#16A34A',
-              borderColor: '#15803D',
-              boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)',
-            }}
-            title="Ver el proceso operativo diario día a día"
-          >
-            <CalendarRange size={14} />
-            <span>Ver Gestión del Proceso (Día a Día) →</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div className="filter-date-badge">
+            <span className="filter-date-label">Corte evaluado:</span>
+            <strong className="filter-date-val">{formatCutoffText(selectedCutoff)}</strong>
+            {selectedCutoff === latestCutoffDate ? (
+              <span className="filter-status-tag current">Al día</span>
+            ) : (
+              <button
+                type="button"
+                className="filter-return-today-btn"
+                onClick={() => setSelectedCutoff(latestCutoffDate)}
+                title="Volver a la fecha actual más reciente"
+              >
+                <RotateCcw size={12} /> Volver a hoy ({formatCutoffShort(latestCutoffDate)})
+              </button>
+            )}
+          </div>
+
+          {onNavigateToGestion && (
+            <button
+              type="button"
+              className="button button-sm button-primary"
+              onClick={onNavigateToGestion}
+              style={{
+                backgroundColor: '#16A34A',
+                borderColor: '#15803D',
+                boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)',
+              }}
+              title="Ver el proceso operativo diario día a día"
+            >
+              <CalendarRange size={14} />
+              <span>Ver Gestión del Proceso (Día a Día) →</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ─── SECCIÓN 1: TARJETAS DE RESUMEN DEL DESMONTE (ESTILO REMISIONES) ─── */}
+      {/* ─── SECCIÓN 1: TARJETAS DE RESUMEN DEL DESMONTE (ESTILO EXACTO A REMISIONES) ─── */}
       <div className="management-daily-history-card">
         <div className="management-table-header">
           <div>
@@ -489,70 +484,107 @@ export function EvolucionBaseView({
           </div>
         </div>
 
-        {/* 1.1 Tarjetas de KPI del Desmonte */}
-        <div className="timeline-summary-cards">
-          {/* Tarjeta 1: Total Dinero que ha Bajado */}
-          <div className="timeline-summary-card tone-green">
-            <div className="timeline-summary-top">
-              <span className="timeline-summary-label">Total Dinero que ha Bajado</span>
-              <span className="cohort-kpi-badge green">Recaudado</span>
-            </div>
-            <strong className="timeline-summary-value text-green">
-              ▼ -{formatCurrency(latestPoint.withdrawnPending)}
-            </strong>
-            <span className="timeline-summary-sub">
-              <strong>{formatPercent(latestPoint.recoveryPct * 100)}</strong> recuperado de la base inicial recibida
-            </span>
-          </div>
-
-          {/* Tarjeta 2: Total Facturas Recaudadas */}
+        {/* Métricas de Desmonte (4 Tarjetas idénticas a Remisiones) */}
+        <div className="cohort-kpis-grid">
+          {/* Tarjeta 1: Base Inicial Entregada */}
           <div
-            className="timeline-summary-card tone-green"
-            style={{ cursor: 'pointer' }}
+            className="cohort-kpi-card"
+            role="button"
+            tabIndex={0}
             onClick={() => {
-              setStatusFilter('killed');
+              setStatusFilter('all');
               document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
-            title="Haz clic para ver las facturas recaudadas en la tabla"
+            style={{ cursor: 'pointer' }}
+            title="Ver todo el inventario de la base entregada"
           >
-            <div className="timeline-summary-top">
-              <span className="timeline-summary-label">Total Facturas Recaudadas</span>
-              <span className="cohort-kpi-badge green">Cerradas</span>
+            <div className="cohort-kpi-top">
+              <span className="cohort-kpi-label">Base Inicial Entregada</span>
+              <span className="cohort-kpi-badge blue">Base fija</span>
             </div>
-            <strong className="timeline-summary-value text-green">
-              ▼ -{formatNumber(latestPoint.withdrawnCount)} facturas
-            </strong>
-            <span className="timeline-summary-sub">
-              <strong>
-                {formatPercent(
-                  initialPoint.initialCount > 0
-                    ? (latestPoint.withdrawnCount / initialPoint.initialCount) * 100
-                    : 0
-                )}
-              </strong>{' '}
-              saldadas con recibo de caja · Ver tabla ↓
+            <strong className="cohort-kpi-value">{formatCurrency(initialPoint.initialPending)}</strong>
+            <span className="cohort-kpi-sub">
+              <strong>{formatNumber(initialPoint.initialCount)}</strong> facturas entregadas el {formatCutoffShort(initialPoint.cutoff)}
             </span>
           </div>
 
-          {/* Tarjeta 3: Saldo Restante de la Base */}
+          {/* Tarjeta 2: Saldo Restante Base */}
           <div
-            className="timeline-summary-card tone-blue"
-            style={{ cursor: 'pointer' }}
+            className="cohort-kpi-card"
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setStatusFilter('open');
               document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
-            title="Haz clic para ver las facturas abiertas en la tabla"
+            style={{ cursor: 'pointer' }}
+            title="Ver facturas que aún están abiertas en la tabla"
           >
-            <div className="timeline-summary-top">
-              <span className="timeline-summary-label">Saldo Restante de la Base</span>
-              <span className="cohort-kpi-badge purple">Por Cobrar</span>
+            <div className="cohort-kpi-top">
+              <span className="cohort-kpi-label">Saldo Restante Base</span>
+              <span className="cohort-kpi-badge purple">{selectedCutoff === initialPoint.cutoff ? 'Inicio' : 'Al Corte'}</span>
             </div>
-            <strong className="timeline-summary-value text-blue">
-              {formatCurrency(latestPoint.stillOpenPending)}
+            <strong className="cohort-kpi-value text-blue">
+              {formatCurrency(currentCohortPoint.stillOpenPending)}
             </strong>
-            <span className="timeline-summary-sub">
-              <strong>{formatNumber(latestPoint.stillOpenCount)} facturas</strong> aún abiertas de la base recibida · Ver tabla ↓
+            <span className="cohort-kpi-sub">
+              <strong>{formatNumber(currentCohortPoint.stillOpenCount)}</strong> facturas aún abiertas de la base
+            </span>
+          </div>
+
+          {/* Tarjeta 3: ¿Cuánto Dinero Bajó? */}
+          <div
+            className="cohort-kpi-card highlight"
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              setStatusFilter('killed');
+              setRecaudoScope('acumulado');
+              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            style={{ cursor: 'pointer' }}
+            title="Ver facturas recaudadas en la tabla"
+          >
+            <div className="cohort-kpi-top">
+              <span className="cohort-kpi-label">¿Cuánto Dinero Bajó?</span>
+              <span className="cohort-kpi-badge green">Recaudado</span>
+            </div>
+            <strong className="cohort-kpi-value text-green">
+              {currentCohortPoint.withdrawnPending > 0
+                ? `▼ -${formatCurrency(currentCohortPoint.withdrawnPending)}`
+                : '$ 0'}
+            </strong>
+            <span className="cohort-kpi-sub">
+              {currentCohortPoint.withdrawnPending > 0
+                ? `Bajó de las que estaban ahí (${formatPercent((currentCohortPoint.recoveryPct || 0) * 100)})`
+                : 'Punto de partida de la entrega'}
+            </span>
+          </div>
+
+          {/* Tarjeta 4: Facturas Salidas */}
+          <div
+            className="cohort-kpi-card highlight"
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              setStatusFilter('killed');
+              setRecaudoScope('acumulado');
+              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            style={{ cursor: 'pointer' }}
+            title="Ver facturas recaudadas en la tabla"
+          >
+            <div className="cohort-kpi-top">
+              <span className="cohort-kpi-label">Facturas Salidas</span>
+              <span className="cohort-kpi-badge green">Cerradas</span>
+            </div>
+            <strong className="cohort-kpi-value text-green">
+              {currentCohortPoint.withdrawnCount > 0
+                ? `▼ -${formatNumber(currentCohortPoint.withdrawnCount)} fact.`
+                : '0 fact.'}
+            </strong>
+            <span className="cohort-kpi-sub">
+              de las <strong>{formatNumber(initialPoint.initialCount)}</strong> entregadas
             </span>
           </div>
         </div>
@@ -871,7 +903,10 @@ export function EvolucionBaseView({
               </button>
               <button
                 type="button"
-                onClick={() => setStatusFilter('killed')}
+                onClick={() => {
+                  setStatusFilter('killed');
+                  setRecaudoScope('acumulado');
+                }}
                 style={{
                   padding: '6px 12px',
                   fontSize: 12,
@@ -1045,8 +1080,32 @@ export function EvolucionBaseView({
               <tbody>
                 {filteredRecaudos.length === 0 ? (
                   <tr>
-                    <td colSpan={12} style={{ textAlign: 'center', padding: '36px 14px', color: '#94A3B8' }}>
-                      No se encontraron facturas recaudadas para los filtros seleccionados.
+                    <td colSpan={12} style={{ textAlign: 'center', padding: '36px 14px', color: '#64748B' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                        <span>
+                          {recaudoScope === 'dia'
+                            ? `No se registraron recaudos específicamente el día ${formatCutoffText(selectedCutoff)}.`
+                            : 'No se encontraron facturas recaudadas para los filtros seleccionados.'}
+                        </span>
+                        {recaudoScope === 'dia' && baseRecaudos.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setRecaudoScope('acumulado')}
+                            style={{
+                              padding: '6px 14px',
+                              backgroundColor: '#16A34A',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Ver todos los {formatNumber(baseRecaudos.length)} recaudos acumulados de la base →
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (

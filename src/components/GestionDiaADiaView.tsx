@@ -29,6 +29,9 @@ import {
   Filter,
   Info,
   FileText,
+  RotateCcw,
+  CircleDollarSign,
+  ArrowDownRight,
 } from 'lucide-react';
 import type { CarteraRecord, ReciboCajaRecord, NotaCreditoRecord, AgeBucketKey } from '../types';
 import {
@@ -323,6 +326,17 @@ export function GestionDiaADiaView({
     [vivasList]
   );
 
+  const netDifference = useMemo(
+    () => totalEntrantesValor - totalSalientesValor,
+    [totalEntrantesValor, totalSalientesValor]
+  );
+
+  const uniqueVivasClients = useMemo(() => {
+    const set = new Set<string>();
+    vivasList.forEach((r) => set.add(r.Identificacion || r.Empresa));
+    return set.size;
+  }, [vivasList]);
+
   // ─── DESMONTE POR EDADES (COMPOSICIÓN DEL TOTAL QUE HA BAJADO) ───
   // ¿De qué edades de cartera eran las facturas recaudadas? (Estilo Remisiones)
   const desmonteAgingBreakdown = useMemo(() => {
@@ -600,23 +614,42 @@ export function GestionDiaADiaView({
           </div>
         </div>
 
-        {onNavigateToEvolucion && (
-          <button
-            type="button"
-            className="button button-sm button-secondary"
-            onClick={onNavigateToEvolucion}
-            style={{
-              backgroundColor: '#FAF5FF',
-              borderColor: '#D8B4FE',
-              color: '#7E22CE',
-              fontWeight: 700,
-            }}
-            title="Ver desmonte exclusivo de la cohorte recibida al 06/10"
-          >
-            <TrendingDown size={14} />
-            <span>Ver Desmonte en Evolución (Base 06/10) →</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div className="filter-date-badge">
+            <span className="filter-date-label">Fecha activa:</span>
+            <strong className="filter-date-val">{formatCutoffText(selectedCutoff)}</strong>
+            {selectedCutoff === latestCutoffDate ? (
+              <span className="filter-status-tag current">Al día</span>
+            ) : (
+              <button
+                type="button"
+                className="filter-return-today-btn"
+                onClick={() => setSelectedCutoff(latestCutoffDate)}
+                title="Volver a la fecha actual más reciente"
+              >
+                <RotateCcw size={12} /> Volver a hoy ({formatCutoffShort(latestCutoffDate)})
+              </button>
+            )}
+          </div>
+
+          {onNavigateToEvolucion && (
+            <button
+              type="button"
+              className="button button-sm button-secondary"
+              onClick={onNavigateToEvolucion}
+              style={{
+                backgroundColor: '#FAF5FF',
+                borderColor: '#D8B4FE',
+                color: '#7E22CE',
+                fontWeight: 700,
+              }}
+              title="Ver desmonte exclusivo de la cohorte recibida al 06/10"
+            >
+              <TrendingDown size={14} />
+              <span>Ver Desmonte en Evolución (Base 06/10) →</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ─── SECCIÓN 1: SEGUIMIENTO CRONOLÓGICO DEL DESMONTE DE LA BASE INICIAL ─── */}
@@ -1205,31 +1238,50 @@ export function GestionDiaADiaView({
             </h2>
           </div>
 
-          {onSync && (
-            <button
-              onClick={onSync}
-              disabled={isLoading}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 20px',
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
-                transition: 'all 0.2s ease',
-                opacity: isLoading ? 0.7 : 1,
-              }}
-            >
-              <RefreshCw size={16} className={isLoading ? 'spin-animation' : ''} />
-              {isLoading ? 'Consultando ERP...' : 'Consultar ERP en Vivo Ahora'}
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="filter-date-badge" style={{ backgroundColor: '#1E293B', borderColor: '#334155', color: '#F8FAFC' }}>
+              <span className="filter-date-label" style={{ color: '#94A3B8' }}>Fecha activa:</span>
+              <strong className="filter-date-val" style={{ color: '#FFFFFF' }}>{formatCutoffText(selectedCutoff)}</strong>
+              {selectedCutoff === latestCutoffDate ? (
+                <span className="filter-status-tag current">Al día</span>
+              ) : (
+                <button
+                  type="button"
+                  className="filter-return-today-btn"
+                  onClick={() => setSelectedCutoff(latestCutoffDate)}
+                  title="Volver a la fecha actual más reciente"
+                >
+                  <RotateCcw size={12} /> Volver a hoy ({formatCutoffShort(latestCutoffDate)})
+                </button>
+              )}
+            </div>
+
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={isLoading}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 20px',
+                  backgroundColor: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
+                  transition: 'all 0.2s ease',
+                  opacity: isLoading ? 0.7 : 1,
+                }}
+              >
+                <RefreshCw size={16} className={isLoading ? 'spin-animation' : ''} />
+                {isLoading ? 'Consultando ERP...' : 'Consultar ERP en Vivo Ahora'}
+              </button>
+            )}
+          </div>
         </div>
         {/* Banner Informativo de Situación Operativa del Corte Seleccionado */}
         <div
@@ -1275,184 +1327,92 @@ export function GestionDiaADiaView({
           </div>
         </div>
 
-        {/* 2.2 Tarjetas Operativas Directas (Base Recibida, Lo que Salió, Lo que Entró, Total en Cartera) */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 14,
-            marginBottom: 20,
-          }}
-        >
-          {/* Tarjeta 0: BASE RECIBIDA DE PARTIDA (AL 06/10) */}
+        {/* 2.2 Tarjetas de Gestión Operativa (Estilo Exacto a Remisiones) */}
+        <div className="management-kpis-grid" style={{ marginBottom: 20 }}>
+          {/* Tarjeta 1: Saldo Pendiente Total */}
           <div
-            onClick={onNavigateToEvolucion}
-            style={{
-              backgroundColor: '#FAF5FF',
-              border: '1.5px solid #E9D5FF',
-              borderRadius: 14,
-              padding: '18px 20px',
-              cursor: onNavigateToEvolucion ? 'pointer' : 'default',
-              transition: 'all 0.15s ease',
-            }}
-            title="Toca para ver el desmonte en Evolución"
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#7E22CE', textTransform: 'uppercase' }}>
-                📁 Base Recibida (06/10)
-              </span>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  backgroundColor: '#F3E8FF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9333EA',
-                }}
-              >
-                <Layers size={20} />
-              </div>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#6B21A8', marginBottom: 4 }}>
-              {formatCurrency(initialBaseRecords.reduce((s, r) => s + r.Valor_Saldo, 0))}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 750, color: '#7E22CE' }}>
-              {formatNumber(initialBaseRecords.length)} facturas entregadas
-            </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Lote de partida recibido al inicio de la gestión
-            </div>
-          </div>
-
-          {/* Tarjeta 1: LO QUE SALIÓ (FACTURAS RECAUDADAS POR RECIBOS DE CAJA) */}
-          <div
-            onClick={() => setActiveTab('salientes')}
-            style={{
-              backgroundColor: activeTab === 'salientes' ? '#F0FDF4' : '#FFFFFF',
-              border: activeTab === 'salientes' ? '2px solid #22C55E' : '1px solid #E2E8F0',
-              borderRadius: 14,
-              padding: '18px 20px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              boxShadow: activeTab === 'salientes' ? '0 4px 12px rgba(34, 197, 94, 0.15)' : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#15803D', textTransform: 'uppercase' }}>
-                🟢 Facturas Recaudadas
-              </span>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  backgroundColor: '#DCFCE7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#16A34A',
-                }}
-              >
-                <ArrowUpRight size={20} />
-              </div>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#166534', marginBottom: 4 }}>
-              {formatCurrency(totalSalientesValor)}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 750, color: '#15803D' }}>
-              {salientesList.length} facturas saldadas
-            </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Fueron recaudadas/saldadas con Recibo de Caja
-            </div>
-          </div>
-
-          {/* Tarjeta 2: LO QUE ENTRÓ (NUEVAS FACTURAS EMITIDAS) */}
-          <div
-            onClick={() => setActiveTab('entrantes')}
-            style={{
-              backgroundColor: activeTab === 'entrantes' ? '#EFF6FF' : '#FFFFFF',
-              border: activeTab === 'entrantes' ? '2px solid #3B82F6' : '1px solid #E2E8F0',
-              borderRadius: 14,
-              padding: '18px 20px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              boxShadow: activeTab === 'entrantes' ? '0 4px 12px rgba(59, 130, 246, 0.15)' : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#1D4ED8', textTransform: 'uppercase' }}>
-                🔵 Nuevas Facturas
-              </span>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  backgroundColor: '#DBEAFE',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#2563EB',
-                }}
-              >
-                <ArrowDownLeft size={20} />
-              </div>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#1E40AF', marginBottom: 4 }}>
-              {formatCurrency(totalEntrantesValor)}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 750, color: '#1D4ED8' }}>
-              {entrantesList.length} facturas nuevas
-            </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Nuevas ventas emitidas en el ERP
-            </div>
-          </div>
-
-          {/* Tarjeta 3: TODAS LAS ACTIVAS EN CARTERA */}
-          <div
+            className={`mgmt-kpi-item ${activeTab === 'vivas' ? 'favorable' : ''}`}
+            role="button"
+            tabIndex={0}
             onClick={() => setActiveTab('vivas')}
-            style={{
-              backgroundColor: activeTab === 'vivas' ? '#F8FAFC' : '#FFFFFF',
-              border: activeTab === 'vivas' ? '2px solid #0F172A' : '1px solid #E2E8F0',
-              borderRadius: 14,
-              padding: '18px 20px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              boxShadow: activeTab === 'vivas' ? '0 4px 12px rgba(15, 23, 42, 0.08)' : 'none',
-            }}
+            title="Ver todas las facturas abiertas de la cartera"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
-                📋 Total en Cartera
+            <div className="mgmt-kpi-top">
+              <span className="mgmt-kpi-label">Saldo Pendiente Total</span>
+              <span className="mgmt-kpi-badge blue">Día Actual</span>
+            </div>
+            <strong className="mgmt-kpi-value">{formatCurrency(totalVivasValor)}</strong>
+            <div className="mgmt-kpi-foot">
+              <CircleDollarSign size={15} />
+              <span>
+                <strong>{formatNumber(vivasList.length)}</strong> facturas · <strong>{formatNumber(uniqueVivasClients)}</strong> clientes
               </span>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  backgroundColor: '#F1F5F9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#334155',
-                }}
-              >
-                <Package size={20} />
-              </div>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>
-              {formatCurrency(totalVivasValor)}
+          </div>
+
+          {/* Tarjeta 2: Nuevas Facturas (Entradas) */}
+          <div
+            className={`mgmt-kpi-item warning ${activeTab === 'entrantes' ? 'selected' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab('entrantes')}
+            title="Ver nuevas facturas emitidas"
+          >
+            <div className="mgmt-kpi-top">
+              <span className="mgmt-kpi-label">Nuevas Facturas (Ingresos)</span>
+              <span className="mgmt-kpi-badge orange">Entradas</span>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 750, color: '#475569' }}>
-              {vivasList.length} facturas pendientes hoy
+            <strong className="mgmt-kpi-value text-orange">
+              +{formatCurrency(totalEntrantesValor)}
+            </strong>
+            <div className="mgmt-kpi-foot">
+              <ArrowUpRight size={15} />
+              <span>
+                <strong>{formatNumber(entrantesList.length)}</strong> facturas nuevas emitidas
+              </span>
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-              Total cartera viva en el ERP en este instante
+          </div>
+
+          {/* Tarjeta 3: Facturas Recaudadas (Salidas) */}
+          <div
+            className={`mgmt-kpi-item success ${activeTab === 'salientes' ? 'selected' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab('salientes')}
+            title="Ver facturas recaudadas con recibo"
+          >
+            <div className="mgmt-kpi-top">
+              <span className="mgmt-kpi-label">Facturas Recaudadas (Salidas)</span>
+              <span className="mgmt-kpi-badge green">Retiradas</span>
+            </div>
+            <strong className="mgmt-kpi-value text-green">
+              -{formatCurrency(totalSalientesValor)}
+            </strong>
+            <div className="mgmt-kpi-foot">
+              <ArrowDownRight size={15} />
+              <span>
+                <strong>{formatNumber(salientesList.length)}</strong> facturas saldadas con recibo
+              </span>
+            </div>
+          </div>
+
+          {/* Tarjeta 4: ¿Subió o bajó el saldo hoy? */}
+          <div className={`mgmt-kpi-item ${netDifference <= 0 ? 'success' : 'warning'}`}>
+            <div className="mgmt-kpi-top">
+              <span className="mgmt-kpi-label">¿Subió o bajó el saldo hoy?</span>
+              <span className={`mgmt-kpi-badge ${netDifference <= 0 ? 'green' : 'orange'}`}>
+                {netDifference <= 0 ? 'Disminuyó (Favorable)' : 'Aumentó (Alerta)'}
+              </span>
+            </div>
+            <strong className={`mgmt-kpi-value ${netDifference <= 0 ? 'text-green' : 'text-orange'}`}>
+              {netDifference <= 0 ? '▼ -' : '▲ +'}{formatCurrency(Math.abs(netDifference))}
+            </strong>
+            <div className="mgmt-kpi-foot">
+              <span>
+                {netDifference <= 0
+                  ? `Favorable: -${formatCompactCurrency(totalSalientesValor)} recaudadas, +${formatCompactCurrency(totalEntrantesValor)} nuevas`
+                  : `Subió: +${formatCompactCurrency(totalEntrantesValor)} nuevas, solo -${formatCompactCurrency(totalSalientesValor)} recaudadas`}
+              </span>
             </div>
           </div>
         </div>
