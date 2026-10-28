@@ -64,19 +64,27 @@ interface Props {
 
 interface CohortPoint {
   cutoff: string;
-  initialPending: number;
-  initialCount: number;
+  portfolioPending: number;
+  portfolioCount: number;
   stillOpenPending: number;
   stillOpenCount: number;
+  dailyWithdrawnPending: number;
+  dailyWithdrawnCount: number;
+  dailyNewInvoicesPending: number;
+  dailyNewInvoicesCount: number;
+  dailyNotasPending: number;
+  dailyNotasCount: number;
+  dailyNewPending: number;
+  dailyNewCount: number;
+  dailyDelta: number;
+  dailyDeltaPct: number;
+  isDeltaDown: boolean;
+  initialPending: number;
+  initialCount: number;
   withdrawnPending: number;
   withdrawnCount: number;
   recoveryPct: number;
   stillOpenPct: number;
-  dailyWithdrawnPending: number;
-  dailyWithdrawnCount: number;
-  dailyDeltaPct: number;
-  dailyNewPending: number;
-  dailyNewCount: number;
 }
 
 function formatCutoffText(iso: string): string {
@@ -201,7 +209,7 @@ export function GestionDiaADiaView({
     }
   }, [selectedDirectorProp]);
 
-  // Construcción de la Serie Cronológica de Desmonte (Idéntico a Remisiones)
+  // Construcción de la Serie Cronológica de la Cartera Viva Día a Día
   const cohortSeries: CohortPoint[] = useMemo(() => {
     if (!cohortDates.length) return [];
 
@@ -215,78 +223,121 @@ export function GestionDiaADiaView({
 
     let accumulatedWithdrawn = 0;
     let accumulatedWithdrawnCount = 0;
-    let prevStillOpenPending = initialPending;
-    let prevStillOpenCount = initialCount;
+    let prevPortfolioPending = 0;
 
     return cohortDates.map((cutoff, idx) => {
-      // Recaudos de este día específico según perspectiva seleccionada
+      // Documentos con emisión <= cutoff
+      const activeRecordsAtCutoff = records.filter((r) => {
+        const emision = r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '';
+        return emision <= cutoff;
+      });
+
+      // Recaudos posteriores a este corte (dinero que en la fecha 'cutoff' todavía estaba pendiente)
+      const recibosAfterCutoff = recibos.filter((rc) => {
+        const f = reciboDateCriterion === 'fecha_recibo'
+          ? (rc.Fecha_Recibo || (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : ''))
+          : (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '');
+        return f > cutoff;
+      });
+
+      // Saldo vivo total de la cartera al cierre de esta fecha
+      const portfolioPending =
+        activeRecordsAtCutoff.reduce((sum, r) => sum + r.Valor_Saldo, 0) +
+        recibosAfterCutoff.reduce((sum, rc) => sum + rc.Valor_Pagado, 0);
+
+      const portfolioCount = activeRecordsAtCutoff.length + recibosAfterCutoff.length;
+
+      // Movimientos específicos de este día:
+      // 1. Recaudos que salieron este día
       const dayRecibos = recibosDesdeBase.filter((rc) => {
         const f = reciboDateCriterion === 'fecha_recibo'
           ? (rc.Fecha_Recibo || (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : ''))
           : (rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : '');
         return f === cutoff;
       });
-
-      // Nuevas facturas de este día
-      const dayNuevas = facturasNuevas.filter((r) => {
-        const f = r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '';
-        return f === cutoff;
-      });
-
       const dailyWithdrawnPending = dayRecibos.reduce((sum, rc) => sum + rc.Valor_Pagado, 0);
       const dailyWithdrawnCount = dayRecibos.length;
-
-      const dailyNewPending = dayNuevas.reduce((sum, r) => sum + r.Valor_Saldo, 0);
-      const dailyNewCount = dayNuevas.length;
 
       accumulatedWithdrawn += dailyWithdrawnPending;
       accumulatedWithdrawnCount += dailyWithdrawnCount;
 
-      const stillOpenPending = Math.max(0, initialPending - accumulatedWithdrawn);
-      const stillOpenCount = Math.max(0, initialCount - accumulatedWithdrawnCount);
-      const recoveryPct = initialPending > 0 ? accumulatedWithdrawn / initialPending : 0;
-      const stillOpenPct = initialPending > 0 ? stillOpenPending / initialPending : 0;
-      const dailyDeltaPct = prevStillOpenPending > 0 ? dailyWithdrawnPending / prevStillOpenPending : 0;
+      // 2. Facturas nuevas que entraron este día (saldo positivo) y Notas Crédito (saldo negativo)
+      const dayRecords = records.filter((r) => {
+        const f = r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '';
+        return f === cutoff;
+      });
+      const dayFacturas = dayRecords.filter((r) => r.Valor_Saldo > 0);
+      const dayNotas = dayRecords.filter((r) => r.Valor_Saldo < 0);
 
-      prevStillOpenPending = stillOpenPending;
-      prevStillOpenCount = stillOpenCount;
+      const dailyNewInvoicesPending = dayFacturas.reduce((sum, r) => sum + r.Valor_Saldo, 0);
+      const dailyNewInvoicesCount = dayFacturas.length;
+
+      const dailyNotasPending = dayNotas.reduce((sum, r) => sum + r.Valor_Saldo, 0);
+      const dailyNotasCount = dayNotas.length;
+
+      const dailyNewPending = dailyNewInvoicesPending + dailyNotasPending;
+      const dailyNewCount = dailyNewInvoicesCount + dailyNotasCount;
+
+      // Variación neta respecto al saldo del día anterior
+      const dailyDelta = idx === 0 ? 0 : portfolioPending - prevPortfolioPending;
+      const dailyDeltaPct = prevPortfolioPending > 0 ? Math.abs(dailyDelta) / prevPortfolioPending : 0;
+      const isDeltaDown = dailyDelta < 0;
+
+      const recoveryPct = initialPending > 0 ? accumulatedWithdrawn / initialPending : 0;
+      const stillOpenPct = initialPending > 0 ? portfolioPending / initialPending : 0;
+
+      prevPortfolioPending = portfolioPending;
 
       return {
         cutoff,
+        portfolioPending,
+        portfolioCount,
+        stillOpenPending: portfolioPending,
+        stillOpenCount: portfolioCount,
+        dailyWithdrawnPending,
+        dailyWithdrawnCount,
+        dailyNewInvoicesPending,
+        dailyNewInvoicesCount,
+        dailyNotasPending,
+        dailyNotasCount,
+        dailyNewPending,
+        dailyNewCount,
+        dailyDelta,
+        dailyDeltaPct,
+        isDeltaDown,
         initialPending,
         initialCount,
-        stillOpenPending,
-        stillOpenCount,
         withdrawnPending: accumulatedWithdrawn,
         withdrawnCount: accumulatedWithdrawnCount,
         recoveryPct,
         stillOpenPct,
-        dailyWithdrawnPending,
-        dailyWithdrawnCount,
-        dailyDeltaPct,
-        dailyNewPending,
-        dailyNewCount,
       };
     });
-  }, [cohortDates, initialBaseRecords, recibosDesdeBase, facturasNuevas]);
+  }, [cohortDates, records, recibos, recibosDesdeBase, initialBaseRecords, reciboDateCriterion]);
 
   const initialPoint: CohortPoint = cohortSeries[0] || {
     cutoff: fechaBase,
-    initialPending: 0,
-    initialCount: 0,
+    portfolioPending: 0,
+    portfolioCount: 0,
     stillOpenPending: 0,
     stillOpenCount: 0,
+    dailyWithdrawnPending: 0,
+    dailyWithdrawnCount: 0,
+    dailyNewInvoicesPending: 0,
+    dailyNewInvoicesCount: 0,
+    dailyNotasPending: 0,
+    dailyNotasCount: 0,
+    dailyNewPending: 0,
+    dailyNewCount: 0,
+    dailyDelta: 0,
+    dailyDeltaPct: 0,
+    isDeltaDown: false,
+    initialPending: 0,
+    initialCount: 0,
     withdrawnPending: 0,
     withdrawnCount: 0,
     recoveryPct: 0,
     stillOpenPct: 1,
-    dailyWithdrawnPending: 0,
-    dailyWithdrawnCount: 0,
-    dailyDeltaPct: 0,
-    dailyNewPending: 0,
-    dailyNewCount: 0,
-    dailyNotasPending: 0,
-    dailyNotasCount: 0,
   };
 
   const latestPoint = cohortSeries[cohortSeries.length - 1] || initialPoint;
@@ -324,22 +375,42 @@ export function GestionDiaADiaView({
   // Vivas: Todas las facturas actualmente pendientes en cartera
   const vivasList = records;
 
+  // Desglose de entrantes: Facturas de venta (saldo > 0) vs Notas Crédito (saldo < 0)
+  const entrantesFacturas = useMemo(
+    () => entrantesList.filter((r) => r.Valor_Saldo > 0),
+    [entrantesList]
+  );
+  const entrantesNotas = useMemo(
+    () => entrantesList.filter((r) => r.Valor_Saldo < 0),
+    [entrantesList]
+  );
+
   const totalSalientesValor = useMemo(
     () => salientesList.reduce((sum, rc) => sum + rc.Valor_Pagado, 0),
     [salientesList]
   );
-  const totalEntrantesValor = useMemo(
-    () => entrantesList.reduce((sum, r) => sum + r.Valor_Saldo, 0),
-    [entrantesList]
+  const totalFacturasValor = useMemo(
+    () => entrantesFacturas.reduce((sum, r) => sum + r.Valor_Saldo, 0),
+    [entrantesFacturas]
   );
+  const totalNotasValor = useMemo(
+    () => entrantesNotas.reduce((sum, r) => sum + r.Valor_Saldo, 0),
+    [entrantesNotas]
+  );
+  const totalEntrantesNeto = useMemo(
+    () => totalFacturasValor + totalNotasValor,
+    [totalFacturasValor, totalNotasValor]
+  );
+  const totalEntrantesValor = totalEntrantesNeto;
+
   const totalVivasValor = useMemo(
     () => vivasList.reduce((sum, r) => sum + r.Valor_Saldo, 0),
     [vivasList]
   );
 
   const netDifference = useMemo(
-    () => totalEntrantesValor - totalSalientesValor,
-    [totalEntrantesValor, totalSalientesValor]
+    () => totalEntrantesNeto - totalSalientesValor,
+    [totalEntrantesNeto, totalSalientesValor]
   );
 
   const uniqueVivasClients = useMemo(() => {
@@ -1164,19 +1235,18 @@ export function GestionDiaADiaView({
             const dailyWithdrawn = pt.dailyWithdrawnPending || 0;
             const dailyCount = pt.dailyWithdrawnCount || 0;
             const hasDailyWithdrawn = dailyWithdrawn > 0;
+            const tone = isInitial ? 'base' : pt.isDeltaDown ? 'favorable' : pt.dailyDelta > 0 ? 'alert' : 'neutral';
 
             return (
               <div
                 key={pt.cutoff}
-                className={`mgmt-day-card desmonte-card tone-${
-                  isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
-                } ${isSelected ? 'selected' : ''}`}
+                className={`mgmt-day-card desmonte-card tone-${tone} ${isSelected ? 'selected' : ''}`}
                 onClick={() => setSelectedCutoff(pt.cutoff)}
                 role="button"
                 tabIndex={0}
-                title={`Ver desmonte al ${formatCutoffText(pt.cutoff)}`}
+                title={`Ver gestión al ${formatCutoffText(pt.cutoff)}`}
               >
-                {/* Cabecera: Fecha a la izquierda y Balance / Desmonte del día a la derecha */}
+                {/* Cabecera: Fecha a la izquierda y Balance / Variación del día a la derecha */}
                 <div className="mgmt-day-card-header">
                   <div className="mgmt-day-card-date">
                     <strong>{formatCutoffText(pt.cutoff)}</strong>
@@ -1187,28 +1257,41 @@ export function GestionDiaADiaView({
                     </div>
                   </div>
 
-                  <div
-                    className={`mgmt-day-card-balance tone-${
-                      isInitial ? 'base' : hasDailyWithdrawn ? 'favorable' : 'neutral'
-                    }`}
-                  >
+                  <div className={`mgmt-day-card-balance tone-${tone}`}>
                     {isInitial ? (
                       <div className="mgmt-balance-body">
                         <strong className="mgmt-balance-amount">$ 0</strong>
                         <small className="mgmt-balance-pct">Línea base</small>
                       </div>
-                    ) : (
+                    ) : pt.isDeltaDown ? (
                       <>
                         <span className="mgmt-balance-icon down-icon">▼</span>
                         <div className="mgmt-balance-body">
                           <strong className="mgmt-balance-amount">
-                            -{formatCurrency(dailyWithdrawn)}
+                            -{formatCurrency(Math.abs(pt.dailyDelta))}
                           </strong>
                           <small className="mgmt-balance-pct">
                             Bajó {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
                           </small>
                         </div>
                       </>
+                    ) : pt.dailyDelta > 0 ? (
+                      <>
+                        <span className="mgmt-balance-icon up-icon" style={{ color: '#ea580c' }}>▲</span>
+                        <div className="mgmt-balance-body">
+                          <strong className="mgmt-balance-amount" style={{ color: '#ea580c' }}>
+                            +{formatCurrency(pt.dailyDelta)}
+                          </strong>
+                          <small className="mgmt-balance-pct">
+                            Subió {formatPercent((pt.dailyDeltaPct || 0) * 100)} ese día
+                          </small>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mgmt-balance-body">
+                        <strong className="mgmt-balance-amount">$ 0</strong>
+                        <small className="mgmt-balance-pct">Sin variación</small>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1216,9 +1299,9 @@ export function GestionDiaADiaView({
                 {/* Métricas clave en rejilla responsiva auto-ajustable */}
                 <div className="mgmt-day-card-metrics">
                   <div className="mgmt-day-card-metric-cell">
-                    <small className="mgmt-day-card-sublabel">Saldo restante</small>
-                    <strong className="mgmt-day-card-money">{formatCurrency(pt.stillOpenPending)}</strong>
-                    <small className="text-muted">{formatNumber(pt.stillOpenCount)} facturas abiertas</small>
+                    <small className="mgmt-day-card-sublabel">Saldo total cartera</small>
+                    <strong className="mgmt-day-card-money">{formatCurrency(pt.portfolioPending)}</strong>
+                    <small className="text-muted">{formatNumber(pt.portfolioCount)} facturas abiertas</small>
                   </div>
 
                   <div className="mgmt-day-card-metric-cell">
@@ -1241,14 +1324,30 @@ export function GestionDiaADiaView({
 
                   {!isInitial && (
                     <div className="mgmt-day-card-metric-cell">
-                      <small className="mgmt-day-card-sublabel">⬆ Entraron (Nuevas Facturas)</small>
-                      {(pt.dailyNewCount || 0) > 0 ? (
-                        <>
-                          <strong style={{ color: '#2563EB', fontSize: '12px' }}>+{formatNumber(pt.dailyNewCount || 0)} facturas</strong>
-                          <small style={{ color: '#1D4ED8', fontSize: '10px', fontWeight: 650 }}>
-                            +{formatCurrency(pt.dailyNewPending || 0)}
-                          </small>
-                        </>
+                      <small className="mgmt-day-card-sublabel">⬆ Entraron (Emisiones)</small>
+                      {(pt.dailyNewInvoicesCount || 0) > 0 || (pt.dailyNotasCount || 0) > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {(pt.dailyNewInvoicesCount || 0) > 0 && (
+                            <div>
+                              <strong style={{ color: '#2563EB', fontSize: '11.5px' }}>
+                                +{formatNumber(pt.dailyNewInvoicesCount)} fact.
+                              </strong>
+                              <small style={{ color: '#1D4ED8', fontSize: '10px', fontWeight: 650, marginLeft: 4 }}>
+                                +{formatCompactCurrency(pt.dailyNewInvoicesPending)}
+                              </small>
+                            </div>
+                          )}
+                          {(pt.dailyNotasCount || 0) > 0 && (
+                            <div>
+                              <strong style={{ color: '#DC2626', fontSize: '11.5px' }}>
+                                {formatNumber(pt.dailyNotasCount)} NC
+                              </strong>
+                              <small style={{ color: '#B91C1C', fontSize: '10px', fontWeight: 650, marginLeft: 4 }}>
+                                {formatCompactCurrency(pt.dailyNotasPending)}
+                              </small>
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-muted" style={{ fontSize: '11px' }}>Sin emisiones</span>
                       )}
@@ -1437,7 +1536,12 @@ export function GestionDiaADiaView({
               Estado Operativo en Tiempo Real · {selectedCutoff === todayStr ? 'Jornada de Hoy' : 'Corte Seleccionado'} ({formatCutoffText(selectedCutoff)})
             </strong>
             <div>
-              • <strong>🔵 Nuevas Facturas Emitidas:</strong> En la fecha {formatCutoffText(selectedCutoff)} se registran <strong>{entrantesList.length} nuevas facturas</strong> por un valor de <strong>{formatCurrency(totalEntrantesValor)}</strong> en el ERP.<br />
+              • <strong>🔵 Nuevas Facturas Emitidas:</strong> En la fecha {formatCutoffText(selectedCutoff)} se {entrantesFacturas.length === 1 ? 'registra' : 'registran'} <strong>{entrantesFacturas.length} {entrantesFacturas.length === 1 ? 'nueva factura' : 'nuevas facturas'}</strong> por un valor de <strong>+{formatCurrency(totalFacturasValor)}</strong> en el ERP.<br />
+              {entrantesNotas.length > 0 && (
+                <>
+                  • <strong>🟠 Notas Crédito / Ajustes:</strong> Se {entrantesNotas.length === 1 ? 'registra' : 'registran'} <strong>{entrantesNotas.length} {entrantesNotas.length === 1 ? 'nota crédito' : 'notas crédito'}</strong> por un valor de <strong>{formatCurrency(totalNotasValor)}</strong> (disminuyen cartera).<br />
+                </>
+              )}
               • <strong>🟢 Recibos de Caja:</strong> Se registran <strong>{salientesList.length} facturas recaudadas</strong> por <strong>{formatCurrency(totalSalientesValor)}</strong>.
               {selectedCutoff === todayStr && salientesList.length === 0 && (
                 <span> (Los recibos emitidos hoy en caja/tesorería permanecen en lote preliminar en Siesa y se reflejarán al momento del cierre diario).</span>
@@ -1469,25 +1573,33 @@ export function GestionDiaADiaView({
             </div>
           </div>
 
-          {/* Tarjeta 2: Nuevas Facturas (Entradas) */}
+          {/* Tarjeta 2: Nuevas Facturas y Notas Crédito */}
           <div
             className={`mgmt-kpi-item warning ${activeTab === 'entrantes' ? 'selected' : ''}`}
             role="button"
             tabIndex={0}
             onClick={() => setActiveTab('entrantes')}
-            title="Ver nuevas facturas emitidas"
+            title="Ver nuevas facturas y notas crédito emitidas"
           >
             <div className="mgmt-kpi-top">
-              <span className="mgmt-kpi-label">Nuevas Facturas (Ingresos)</span>
+              <span className="mgmt-kpi-label">Nuevas Emisiones (Facturas & NC)</span>
               <span className="mgmt-kpi-badge orange">Entradas</span>
             </div>
             <strong className="mgmt-kpi-value text-orange">
-              +{formatCurrency(totalEntrantesValor)}
+              {totalEntrantesNeto >= 0 ? `+${formatCurrency(totalEntrantesNeto)}` : formatCurrency(totalEntrantesNeto)}
             </strong>
             <div className="mgmt-kpi-foot">
               <ArrowUpRight size={15} />
               <span>
-                <strong>{formatNumber(entrantesList.length)}</strong> facturas nuevas emitidas
+                {entrantesNotas.length > 0 ? (
+                  <>
+                    <strong>{formatNumber(entrantesFacturas.length)}</strong> fact. (+{formatCompactCurrency(totalFacturasValor)}) · <strong>{formatNumber(entrantesNotas.length)}</strong> NC ({formatCompactCurrency(totalNotasValor)})
+                  </>
+                ) : (
+                  <>
+                    <strong>{formatNumber(entrantesFacturas.length)}</strong> facturas nuevas emitidas
+                  </>
+                )}
               </span>
             </div>
           </div>
@@ -1528,9 +1640,15 @@ export function GestionDiaADiaView({
             </strong>
             <div className="mgmt-kpi-foot">
               <span>
-                {netDifference <= 0
-                  ? `Favorable: -${formatCompactCurrency(totalSalientesValor)} recaudadas, +${formatCompactCurrency(totalEntrantesValor)} nuevas`
-                  : `Subió: +${formatCompactCurrency(totalEntrantesValor)} nuevas, solo -${formatCompactCurrency(totalSalientesValor)} recaudadas`}
+                {netDifference <= 0 ? (
+                  totalNotasValor < 0 && totalSalientesValor === 0 ? (
+                    `Disminuyó: ${formatCompactCurrency(Math.abs(totalNotasValor))} en notas crédito superó +${formatCompactCurrency(totalFacturasValor)} en facturas`
+                  ) : (
+                    `Favorable: -${formatCompactCurrency(totalSalientesValor)} recaudadas y ${formatCompactCurrency(totalNotasValor)} en notas crédito`
+                  )
+                ) : (
+                  `Subió: +${formatCompactCurrency(totalFacturasValor)} en facturas superó -${formatCompactCurrency(totalSalientesValor)} en recaudos`
+                )}
               </span>
             </div>
           </div>
@@ -1675,7 +1793,7 @@ export function GestionDiaADiaView({
                   transition: 'all 0.15s ease',
                 }}
               >
-                🔵 Nuevas Facturas ({entrantesList.length})
+                🔵 Nuevas Emisiones ({entrantesNotas.length > 0 ? `${entrantesFacturas.length} fact · ${entrantesNotas.length} NC` : `${entrantesList.length}`})
               </button>
 
               <button
@@ -1810,7 +1928,7 @@ export function GestionDiaADiaView({
               {activeTab === 'salientes'
                 ? `🟢 Facturas Recaudadas (${filterMode === 'dia' ? formatCutoffText(selectedCutoff) : 'Acumulado'}): ${currentList.length} facturas`
                 : activeTab === 'entrantes'
-                ? `🔵 Nuevas Facturas Emitidas (${filterMode === 'dia' ? formatCutoffText(selectedCutoff) : 'Acumulado'}): ${currentList.length} facturas`
+                ? `🔵 Nuevas Emisiones (${filterMode === 'dia' ? formatCutoffText(selectedCutoff) : 'Acumulado'}): ${entrantesFacturas.length} facturas · ${entrantesNotas.length} notas crédito`
                 : `📋 Total de Facturas Activas en Cartera: ${currentList.length} facturas`}
             </span>
             <span style={{ fontSize: 13, color: '#64748B' }}>
@@ -1832,6 +1950,11 @@ export function GestionDiaADiaView({
                     : (currentList as CarteraRecord[]).reduce((s, r) => s + r.Valor_Saldo, 0)
                 )}
               </strong>
+              {activeTab === 'entrantes' && entrantesNotas.length > 0 && (
+                <small style={{ marginLeft: 6, fontSize: 11, color: '#64748B' }}>
+                  (+{formatCompactCurrency(totalFacturasValor)} facturas · {formatCompactCurrency(totalNotasValor)} NC)
+                </small>
+              )}
             </span>
           </div>
 
@@ -1947,7 +2070,7 @@ export function GestionDiaADiaView({
                         onClick={() => onSelectRecord && onSelectRecord(r)}
                       >
                         <td style={{ padding: '10px 16px', color: '#64748B', fontSize: 12 }}>{idx + 1}</td>
-                        <td style={{ padding: '10px 16px', fontWeight: 700, color: '#0071e3' }}>
+                        <td style={{ padding: '10px 16px', fontWeight: 700, color: r.Valor_Saldo < 0 ? '#DC2626' : '#0071e3' }}>
                           {r.Prefijo} {r.Numero}
                         </td>
                         <td style={{ padding: '10px 16px', fontWeight: 600, color: '#1E293B' }}>
@@ -1963,24 +2086,40 @@ export function GestionDiaADiaView({
                             padding: '10px 16px',
                             textAlign: 'right',
                             fontWeight: 750,
-                            color: '#1E293B',
+                            color: r.Valor_Saldo < 0 ? '#DC2626' : '#1E293B',
                           }}
                         >
                           {formatCurrency(r.Valor_Saldo)}
                         </td>
                         <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                          <span
-                            className={`badge ${
-                              r.estaVencida
-                                ? 'badge-danger'
-                                : r.categoriaEdad === 'CORRIENTE'
-                                ? 'badge-success'
-                                : 'badge-warning'
-                            }`}
-                            style={{ fontSize: 10.5, fontWeight: 750, padding: '3px 8px' }}
-                          >
-                            {r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
-                          </span>
+                          {r.Valor_Saldo < 0 || (r.Tipo_Documento && r.Tipo_Documento.toLowerCase().includes('nota')) ? (
+                            <span
+                              className="badge"
+                              style={{
+                                backgroundColor: '#FEF2F2',
+                                color: '#991B1B',
+                                border: '1px solid #FECACA',
+                                fontSize: 10.5,
+                                fontWeight: 750,
+                                padding: '3px 8px',
+                              }}
+                            >
+                              NOTA CRÉDITO
+                            </span>
+                          ) : (
+                            <span
+                              className={`badge ${
+                                r.estaVencida
+                                  ? 'badge-danger'
+                                  : r.categoriaEdad === 'CORRIENTE'
+                                  ? 'badge-success'
+                                  : 'badge-warning'
+                              }`}
+                              style={{ fontSize: 10.5, fontWeight: 750, padding: '3px 8px' }}
+                            >
+                              {r.categoriaEdad === 'CORRIENTE' ? 'AL DÍA' : r.categoriaEdad.replace('_', '-')}
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '10px 16px', color: '#64748B', fontSize: 12 }}>
                           {r.Fecha_Emision ? r.Fecha_Emision.split('T')[0] : '—'}
