@@ -77,11 +77,6 @@ export function GestoresCobranzaWidget({
       onSelectAsesor(null);
     } else {
       onSelectAsesor(nombreAsesor);
-      // Desplazarse suavemente a la tabla de recibos
-      const tableElem = document.getElementById('tabla-recibos-caja');
-      if (tableElem) {
-        tableElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
     }
   };
 

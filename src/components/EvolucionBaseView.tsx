@@ -519,7 +519,6 @@ export function EvolucionBaseView({
             tabIndex={0}
             onClick={() => {
               setStatusFilter('all');
-              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
             style={{ cursor: 'pointer' }}
             title="Ver todo el inventario de la base entregada"
@@ -541,7 +540,6 @@ export function EvolucionBaseView({
             tabIndex={0}
             onClick={() => {
               setStatusFilter('open');
-              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
             style={{ cursor: 'pointer' }}
             title="Ver facturas que aún están abiertas en la tabla"
@@ -566,7 +564,6 @@ export function EvolucionBaseView({
             onClick={() => {
               setStatusFilter('killed');
               setRecaudoScope('acumulado');
-              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
             style={{ cursor: 'pointer' }}
             title="Ver facturas recaudadas en la tabla"
@@ -595,7 +592,6 @@ export function EvolucionBaseView({
             onClick={() => {
               setStatusFilter('killed');
               setRecaudoScope('acumulado');
-              document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
             }}
             style={{ cursor: 'pointer' }}
             title="Ver facturas recaudadas en la tabla"
@@ -894,7 +890,6 @@ export function EvolucionBaseView({
                             setSelectedCutoff(pt.cutoff);
                             setStatusFilter('killed');
                             setRecaudoScope('dia');
-                            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
                           }}
                           style={{
                             display: 'inline-block',
@@ -982,7 +977,6 @@ export function EvolucionBaseView({
           onSelectAging={(key) => {
             setSelectedBaseAging(key);
             setStatusFilter('open');
-            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
           }}
         />
 
@@ -996,7 +990,6 @@ export function EvolucionBaseView({
           onSelectAging={(key) => {
             setSelectedBaseAging(key);
             setStatusFilter('open');
-            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
           }}
           selectedDirector={selectedDirector}
           onSelectDirector={(dir) => {
@@ -1007,7 +1000,6 @@ export function EvolucionBaseView({
           onSelectRecord={onSelectRecord}
           onViewFullTable={() => {
             setStatusFilter('open');
-            document.getElementById('tabla-evolucion-base')?.scrollIntoView({ behavior: 'smooth' });
           }}
         />
       </div>

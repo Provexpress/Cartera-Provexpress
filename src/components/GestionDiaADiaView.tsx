@@ -1668,7 +1668,6 @@ export function GestionDiaADiaView({
             onSelectAging={(key) => {
               setSelectedActiveAging(key);
               setActiveTab('vivas');
-              document.getElementById('monitor-operativo-tabla')?.scrollIntoView({ behavior: 'smooth' });
             }}
           />
 
@@ -1682,7 +1681,6 @@ export function GestionDiaADiaView({
             onSelectAging={(key) => {
               setSelectedActiveAging(key);
               setActiveTab('vivas');
-              document.getElementById('monitor-operativo-tabla')?.scrollIntoView({ behavior: 'smooth' });
             }}
             selectedDirector={selectedDirector}
             onSelectDirector={(dir) => {
