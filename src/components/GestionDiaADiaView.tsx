@@ -768,48 +768,6 @@ export function GestionDiaADiaView({
           </div>
 
           <div className="mgmt-header-actions-row">
-            {/* Selector de Perspectiva de Recaudos */}
-            <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: 3, borderRadius: 10, gap: 4 }}>
-              <button
-                type="button"
-                onClick={() => setReciboDateCriterion('fecha_recibo')}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  fontSize: 11.5,
-                  fontWeight: 750,
-                  cursor: 'pointer',
-                  backgroundColor: reciboDateCriterion === 'fecha_recibo' ? '#2563EB' : 'transparent',
-                  color: reciboDateCriterion === 'fecha_recibo' ? '#FFFFFF' : '#475569',
-                  boxShadow: reciboDateCriterion === 'fecha_recibo' ? '0 2px 4px rgba(37,99,235,0.25)' : 'none',
-                  transition: 'all 0.15s ease',
-                }}
-                title="Agrupar recaudos por día en que Tesorería elaboró el recibo en SISGerente"
-              >
-                1. Día del Recibo (ERP)
-              </button>
-              <button
-                type="button"
-                onClick={() => setReciboDateCriterion('fecha_recaudo')}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  fontSize: 11.5,
-                  fontWeight: 750,
-                  cursor: 'pointer',
-                  backgroundColor: reciboDateCriterion === 'fecha_recaudo' ? '#16A34A' : 'transparent',
-                  color: reciboDateCriterion === 'fecha_recaudo' ? '#FFFFFF' : '#475569',
-                  boxShadow: reciboDateCriterion === 'fecha_recaudo' ? '0 2px 4px rgba(22,163,74,0.25)' : 'none',
-                  transition: 'all 0.15s ease',
-                }}
-                title="Agrupar recaudos por día en que el dinero entró al banco"
-              >
-                2. Día que Entró el Dinero (Banco)
-              </button>
-            </div>
-
             <div className="mgmt-legend-row">
               <span className="mgmt-legend-item favorable-legend">▼ Saldo bajó ese día (Recaudado)</span>
               <span className="mgmt-legend-item blue-legend">Saldo restante</span>

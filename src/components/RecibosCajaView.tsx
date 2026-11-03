@@ -38,11 +38,8 @@ interface Props {
 }
 
 type DatePreset = 'all' | 'today' | 'custom';
-export type DateViewMode = 'fecha_recibo' | 'fecha_recaudo';
 
 export function RecibosCajaView({ recibos }: Props) {
-  // Perspectiva de fecha: 'fecha_recibo' (Día del Recibo en ERP) vs 'fecha_recaudo' (Día que entró el dinero al banco)
-  const [dateViewMode, setDateViewMode] = useState<DateViewMode>('fecha_recibo');
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   
   const now = new Date();
@@ -77,30 +74,27 @@ export function RecibosCajaView({ recibos }: Props) {
     return '';
   }, [datePreset, fechaInicial, fechaFinal, monthOptions, y, m]);
 
-  const getReceiptDate = (r: ReciboCajaRecord, mode: DateViewMode) => {
-    if (mode === 'fecha_recibo') {
-      return r.Fecha_Recibo || (r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '');
-    }
-    return r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : '';
+  const getReceiptDate = (r: ReciboCajaRecord) => {
+    return r.Fecha_Recaudo ? r.Fecha_Recaudo.split('T')[0] : (r.Fecha_Recibo || '');
   };
 
   // Mapa acumulado de pagos por factura para identificar facturas cubiertas con múltiples recibos
   const invoiceTotalPaidMap = useMemo(() => buildInvoiceTotalPaidMap(recibos), [recibos]);
 
-  // 1. Filtrado por período de fecha según la perspectiva seleccionada
+  // 1. Filtrado por período de fecha
   const dateFilteredRecibos = useMemo(() => {
     if (datePreset === 'all') return recibos;
 
     if (datePreset === 'today') {
       return recibos.filter((r) => {
-        const dt = getReceiptDate(r, dateViewMode);
+        const dt = getReceiptDate(r);
         return dt === todayStr;
       });
     }
 
     if (datePreset === 'custom') {
       return recibos.filter((r) => {
-        const dt = getReceiptDate(r, dateViewMode);
+        const dt = getReceiptDate(r);
         if (!dt) return false;
         if (fechaInicial && dt < fechaInicial) return false;
         if (fechaFinal && dt > fechaFinal) return false;
@@ -109,13 +103,13 @@ export function RecibosCajaView({ recibos }: Props) {
     }
 
     return recibos;
-  }, [recibos, datePreset, dateViewMode, fechaInicial, fechaFinal, todayStr]);
+  }, [recibos, datePreset, fechaInicial, fechaFinal, todayStr]);
 
   // 2. Conteo rápido para insignias de botones
   const presetCounts = useMemo(() => {
     let todayCount = 0;
     recibos.forEach((r) => {
-      const dt = getReceiptDate(r, dateViewMode);
+      const dt = getReceiptDate(r);
       if (dt === todayStr) todayCount++;
     });
 
@@ -123,7 +117,7 @@ export function RecibosCajaView({ recibos }: Props) {
       all: recibos.length,
       today: todayCount,
     };
-  }, [recibos, dateViewMode, todayStr]);
+  }, [recibos, todayStr]);
 
   // 3. Filtrado por Director Comercial, Gestor de Cobranza, Asesor y Buscador
   const filtered = useMemo(() => {
@@ -338,105 +332,6 @@ export function RecibosCajaView({ recibos }: Props) {
           <Download size={16} />
           {isExportingExcel ? 'Exportando...' : `Descargar Excel (${formatNumber(filtered.length)})`}
         </button>
-      </div>
-
-      {/* ─── SELECTOR DE LAS DOS VISTAS (FECHA DEL RECIBO VS FECHA DE ENTRADA DEL DINERO) ─── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
-          backgroundColor: '#F8FAFC',
-          border: '1.5px solid #CBD5E1',
-          padding: '12px 18px',
-          borderRadius: 14,
-          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: dateViewMode === 'fecha_recibo' ? '#EFF6FF' : '#F0FDF4',
-              color: dateViewMode === 'fecha_recibo' ? '#2563EB' : '#16A34A',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {dateViewMode === 'fecha_recibo' ? <Clock size={18} /> : <DollarSign size={18} />}
-          </div>
-          <div>
-            <strong style={{ fontSize: 13.5, color: '#0F172A', display: 'block' }}>
-              Criterio de Fecha para Recibos: {dateViewMode === 'fecha_recibo' ? 'Día del Recibo (Elaboración en ERP)' : 'Día que Entró el Dinero (Recaudo Banco)'}
-            </strong>
-            <span style={{ fontSize: 12, color: '#64748B' }}>
-              {dateViewMode === 'fecha_recibo'
-                ? 'Muestra los recibos agrupados por la fecha en que Tesorería los digitó en SISGerente.'
-                : 'Muestra los recibos agrupados por la fecha financiera en que el cliente consignó o el dinero entró al banco.'}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'inline-flex', backgroundColor: '#E2E8F0', padding: 3, borderRadius: 10, gap: 4 }}>
-          <button
-            type="button"
-            onClick={() => {
-              setDateViewMode('fecha_recibo');
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 8,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 750,
-              cursor: 'pointer',
-              backgroundColor: dateViewMode === 'fecha_recibo' ? '#2563EB' : 'transparent',
-              color: dateViewMode === 'fecha_recibo' ? '#FFFFFF' : '#475569',
-              boxShadow: dateViewMode === 'fecha_recibo' ? '0 2px 6px rgba(37,99,235,0.3)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'all 0.15s ease',
-            }}
-            title="Ver según el día en que se elaboró el recibo en el ERP"
-          >
-            <Clock size={13} />
-            <span>1. Día del Recibo (Elaboración en ERP)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setDateViewMode('fecha_recaudo');
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 8,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 750,
-              cursor: 'pointer',
-              backgroundColor: dateViewMode === 'fecha_recaudo' ? '#16A34A' : 'transparent',
-              color: dateViewMode === 'fecha_recaudo' ? '#FFFFFF' : '#475569',
-              boxShadow: dateViewMode === 'fecha_recaudo' ? '0 2px 6px rgba(22,163,74,0.3)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'all 0.15s ease',
-            }}
-            title="Ver según el día en que el dinero entró al banco"
-          >
-            <DollarSign size={13} />
-            <span>2. Día que Entró el Dinero (Banco)</span>
-          </button>
-        </div>
       </div>
 
       {/* ─── 2. BARRA DE PRESETS DE FECHAS (TODA, HOY, MES Y RANGO DE TAL A TAL) ─── */}
@@ -1116,8 +1011,8 @@ export function RecibosCajaView({ recibos }: Props) {
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>#</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Recibo de Caja</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Factura Asociada</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569', minWidth: 160 }}>
-                  Fechas (Recibo / Banco)
+                <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569', minWidth: 130 }}>
+                  Fecha Recaudo
                 </th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>Cliente / Empresa</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>NIT</th>
@@ -1163,23 +1058,11 @@ export function RecibosCajaView({ recibos }: Props) {
                         {rc.Prefijo_FacturaVenta || 'FVE'} {rc.Numero_FacturaVenta}
                       </td>
                       <td style={{ padding: '11px 16px', fontSize: 12 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ fontSize: 10, fontWeight: 750, color: '#1d4ed8', backgroundColor: '#eff6ff', padding: '1px 5px', borderRadius: 4 }}>
-                              Recibo:
-                            </span>
-                            <strong style={{ color: '#0f172a', fontSize: 12 }}>
-                              {rc.Fecha_Recibo || 'N/A'}
-                            </strong>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ fontSize: 10, fontWeight: 750, color: '#15803d', backgroundColor: '#f0fdf4', padding: '1px 5px', borderRadius: 4 }}>
-                              Banco:
-                            </span>
-                            <span style={{ color: '#475569', fontSize: 12 }}>
-                              {rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : 'N/A'}
-                            </span>
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Calendar size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
+                          <strong style={{ color: '#0f172a', fontSize: 12.5 }}>
+                            {rc.Fecha_Recaudo ? rc.Fecha_Recaudo.split('T')[0] : rc.Fecha_Recibo || 'N/A'}
+                          </strong>
                         </div>
                       </td>
                       <td style={{ padding: '11px 16px', fontWeight: 600, color: '#1E293B' }}>{rc.Empresa}</td>
