@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CalendarClock, AlertTriangle, ShieldCheck, Activity, Check } from 'lucide-react';
 import type { AgeBucketKey, AgingSummaryItem } from '../types';
 import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
@@ -92,6 +93,13 @@ export function AgingCards({
   selectedAging,
   onSelectAging,
 }: Props) {
+  const activeBucketLabel = useMemo(() => {
+    if (selectedAging === 'all') return 'Todos';
+    if (selectedAging === 'CRITICO_30') return 'Crítico >30d';
+    const found = agingItems.find((i) => i.key === selectedAging);
+    return found ? found.shortLabel || found.label : String(selectedAging);
+  }, [selectedAging, agingItems]);
+
   return (
     <div className="aging-section">
       {/* 1. Header con Totales Globales y Tacómetro de Riesgo */}
@@ -228,7 +236,7 @@ export function AgingCards({
             className="clear-bucket-btn"
             onClick={() => onSelectAging('all')}
           >
-            Quitar filtro ({selectedAging === 'CRITICO_30' ? 'Crítico >30d' : selectedAging}) ✕
+            Quitar filtro ({activeBucketLabel}) ✕
           </button>
         )}
       </div>

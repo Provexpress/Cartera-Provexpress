@@ -4288,8 +4288,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 .bucket-card.selected {
   background: #fbfdff;
-  border-color: #0071e3;
-  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2), 0 6px 16px rgba(0, 0, 0, 0.04);
+  border-color: #0071e3 !important;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.35), 0 8px 24px rgba(0, 113, 227, 0.12) !important;
+  transform: translateY(-2px);
 }
 
 .bucket-header {

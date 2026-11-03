@@ -141,17 +141,50 @@ export function CarteraCharts({
     return found ? found.name : String(selectedAging);
   }, [selectedAging, displayAgingItems]);
 
+  // ─── FACTURAS FILTRADAS SEGÚN EDAD, DIRECTOR O EJECUTIVO ────────────────
+  const filteredInvoices = useMemo(() => {
+    return records
+      .filter((r) => {
+        if (r.Valor_Saldo <= 0) return false;
+
+        // Filtro por Director
+        if (selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos') {
+          if ((r.directorNombre || '') !== selectedDirector) return false;
+        }
+
+        // Filtro por Ejecutivo
+        if (selectedExecutive && selectedExecutive !== 'all' && selectedExecutive !== 'Todos') {
+          if ((r.Nombre_Empleado || '') !== selectedExecutive) return false;
+        }
+
+        // Filtro por Rango de Edad / Antigüedad
+        if (selectedAging && selectedAging !== 'all') {
+          if (selectedAging === 'CRITICO_30') {
+            const isCritical =
+              ['31_60', '61_90', '91_120', '121_180', 'MAS_180'].includes(r.categoriaEdad) ||
+              r.diasVencimientoCalc > 30;
+            if (!isCritical) return false;
+          } else {
+            if (r.categoriaEdad !== selectedAging) return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => b.Valor_Saldo - a.Valor_Saldo);
+  }, [records, selectedDirector, selectedExecutive, selectedAging]);
+
   // ─── 2. TOP 10 FACTURAS DE MAYOR SALDO ────────────────────────────────────
   const top10Invoices = useMemo(() => {
-    return [...records]
-      .filter((r) => r.Valor_Saldo > 0)
-      .sort((a, b) => b.Valor_Saldo - a.Valor_Saldo)
-      .slice(0, 10);
-  }, [records]);
+    return filteredInvoices.slice(0, 10);
+  }, [filteredInvoices]);
 
   // ─── 3. EJECUTIVOS COMERCIALES CON MAYOR SALDO PENDIENTE ──────────────────
   const sellerChartData = useMemo(() => {
-    if (executives && executives.length > 0) {
+    const hasAgingFilter = selectedAging && selectedAging !== 'all';
+    const hasDirectorFilter = selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos';
+
+    if (!hasAgingFilter && !hasDirectorFilter && executives && executives.length > 0) {
       return [...executives]
         .filter((e) => e.totalSaldo > 0)
         .sort((a, b) => b.totalSaldo - a.totalSaldo)
@@ -167,6 +200,19 @@ export function CarteraCharts({
 
     const map = new Map<string, { total: number; count: number; director: string }>();
     records.forEach((r) => {
+      if (r.Valor_Saldo <= 0) return;
+      if (hasDirectorFilter && (r.directorNombre || '') !== selectedDirector) return;
+      if (hasAgingFilter) {
+        if (selectedAging === 'CRITICO_30') {
+          const isCritical =
+            ['31_60', '61_90', '91_120', '121_180', 'MAS_180'].includes(r.categoriaEdad) ||
+            r.diasVencimientoCalc > 30;
+          if (!isCritical) return;
+        } else if (r.categoriaEdad !== selectedAging) {
+          return;
+        }
+      }
+
       const emp = r.Nombre_Empleado || 'Sin Asignar';
       const cur = map.get(emp) || { total: 0, count: 0, director: r.directorNombre };
       cur.total += r.Valor_Saldo;
@@ -185,32 +231,62 @@ export function CarteraCharts({
         docs: data.count,
         director: data.director,
       }));
-  }, [executives, records]);
+  }, [executives, records, selectedAging, selectedDirector]);
 
   // ─── 4. PENDIENTE POR DIRECCIÓN COMERCIAL (DONUT & LEGEND) ────────────────
   const directorData = useMemo(() => {
-    return groups
-      .filter((g) => g.totalSaldo > 0)
-      .map((g, idx) => {
-        const dirName = g.directorNombre || g.grupoNombre;
-        const color = DIRECTOR_COLOR_MAP[dirName] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length];
-        return {
-          name: dirName,
-          value: g.totalSaldo,
-          count: g.docCount,
-          color,
-        };
-      })
-      .sort((a, b) => b.value - a.value);
-  }, [groups]);
+    const hasAgingFilter = selectedAging && selectedAging !== 'all';
+    if (!hasAgingFilter && groups && groups.length > 0) {
+      return groups
+        .filter((g) => g.totalSaldo > 0)
+        .map((g, idx) => {
+          const dirName = g.directorNombre || g.grupoNombre;
+          const color = DIRECTOR_COLOR_MAP[dirName] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length];
+          return {
+            name: dirName,
+            value: g.totalSaldo,
+            count: g.docCount,
+            color,
+          };
+        })
+        .sort((a, b) => b.value - a.value);
+    }
+
+    const map = new Map<string, { total: number; count: number }>();
+    records.forEach((r) => {
+      if (r.Valor_Saldo <= 0) return;
+      if (hasAgingFilter) {
+        if (selectedAging === 'CRITICO_30') {
+          const isCritical =
+            ['31_60', '61_90', '91_120', '121_180', 'MAS_180'].includes(r.categoriaEdad) ||
+            r.diasVencimientoCalc > 30;
+          if (!isCritical) return;
+        } else if (r.categoriaEdad !== selectedAging) {
+          return;
+        }
+      }
+      const dirName = r.directorNombre || 'Sin Asignar';
+      const cur = map.get(dirName) || { total: 0, count: 0 };
+      cur.total += r.Valor_Saldo;
+      cur.count += 1;
+      map.set(dirName, cur);
+    });
+
+    return Array.from(map.entries())
+      .filter(([, data]) => data.total > 0)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([dirName, data], idx) => ({
+        name: dirName,
+        value: data.total,
+        count: data.count,
+        color: DIRECTOR_COLOR_MAP[dirName] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length],
+      }));
+  }, [groups, records, selectedAging]);
 
   // Lista para la pestaña 'facturas' en Card 4
   const topInvoicesTabList = useMemo(() => {
-    return [...records]
-      .filter((r) => r.Valor_Saldo > 0)
-      .sort((a, b) => b.Valor_Saldo - a.Valor_Saldo)
-      .slice(0, 25);
-  }, [records]);
+    return filteredInvoices.slice(0, 25);
+  }, [filteredInvoices]);
 
   return (
     <div className="chart-grid">
@@ -324,34 +400,80 @@ export function CarteraCharts({
         >
           <div>
             <h2>
-              {selectedExecutive !== 'all'
+              {selectedExecutive && selectedExecutive !== 'all' && selectedExecutive !== 'Todos'
                 ? `Top facturas · ${selectedExecutive}`
-                : selectedAging !== 'all'
+                : selectedAging && selectedAging !== 'all'
                 ? `Top facturas · ${activeAgingLabel}`
-                : selectedDirector !== 'all'
+                : selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos'
                 ? `Top facturas · ${selectedDirector}`
                 : 'Top 10 facturas de mayor saldo'}
             </h2>
             <p>
-              {selectedExecutive !== 'all'
-                ? `Facturas abiertas de ${selectedExecutive} con mayor importe`
-                : selectedAging !== 'all'
-                ? `Facturas abiertas en el rango ${activeAgingLabel} con mayor importe pendiente`
-                : selectedDirector !== 'all'
-                ? `Facturas abiertas de la dirección ${selectedDirector}`
+              {selectedExecutive && selectedExecutive !== 'all' && selectedExecutive !== 'Todos'
+                ? `Facturas abiertas de ${selectedExecutive} (${formatNumber(filteredInvoices.length)} facturas)`
+                : selectedAging && selectedAging !== 'all'
+                ? `Facturas abiertas en ${activeAgingLabel} (${formatNumber(filteredInvoices.length)} facturas)`
+                : selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos'
+                ? `Facturas abiertas de la dirección ${selectedDirector} (${formatNumber(filteredInvoices.length)} facturas)`
                 : 'Facturas abiertas con mayor importe pendiente por cobrar'}
             </p>
           </div>
-          {onViewFullTable && (
-            <button
-              type="button"
-              className="top-remisiones-header-action"
-              onClick={onViewFullTable}
-              title="Ver todas las facturas en la tabla completa"
-            >
-              Ver todas en detalle →
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {selectedAging && selectedAging !== 'all' && (
+              <button
+                type="button"
+                onClick={() => onSelectAging?.('all')}
+                style={{
+                  fontSize: 11,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #0071e3',
+                  background: 'rgba(0, 113, 227, 0.08)',
+                  color: '#0071e3',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="Quitar filtro de antigüedad"
+              >
+                ✕ {activeAgingLabel}
+              </button>
+            )}
+            {selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos' && (
+              <button
+                type="button"
+                onClick={() => onSelectDirector?.('all')}
+                style={{
+                  fontSize: 11,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #7928ca',
+                  background: 'rgba(121, 40, 202, 0.08)',
+                  color: '#7928ca',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="Quitar filtro de dirección"
+              >
+                ✕ {selectedDirector}
+              </button>
+            )}
+            {onViewFullTable && (
+              <button
+                type="button"
+                className="top-remisiones-header-action"
+                onClick={onViewFullTable}
+                title="Ver todas las facturas en la tabla completa"
+              >
+                Ver todas en detalle →
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="top-remisiones-list" style={{ minHeight: 300, maxHeight: 310 }}>
@@ -586,17 +708,21 @@ export function CarteraCharts({
           <div>
             <h2>
               {rightTab === 'facturas'
-                ? 'Facturas destacadas'
-                : selectedAging !== 'all'
+                ? selectedAging && selectedAging !== 'all'
+                  ? `Facturas destacadas · ${activeAgingLabel}`
+                  : 'Facturas destacadas'
+                : selectedAging && selectedAging !== 'all'
                 ? `Dirección comercial · ${activeAgingLabel}`
+                : selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos'
+                ? `Dirección comercial · ${selectedDirector}`
                 : 'Pendiente por dirección'}
             </h2>
             <p>
               {rightTab === 'facturas'
-                ? `${formatNumber(records.length)} facturas ordenadas por mayor importe`
-                : selectedDirector !== 'all'
+                ? `${formatNumber(filteredInvoices.length)} facturas ordenadas por mayor importe`
+                : selectedDirector && selectedDirector !== 'all' && selectedDirector !== 'Todos'
                 ? `Filtrado por: ${selectedDirector} · Toca para quitar`
-                : selectedAging !== 'all'
+                : selectedAging && selectedAging !== 'all'
                 ? `Distribución de saldo por dirección en el rango ${activeAgingLabel}`
                 : 'Toca una dirección para filtrar todo el tablero'}
             </p>
@@ -610,7 +736,7 @@ export function CarteraCharts({
                 title="Ver facturas destacadas"
               >
                 <FileText size={12} />
-                <span>Facturas ({formatNumber(records.length)})</span>
+                <span>Facturas ({formatNumber(filteredInvoices.length)})</span>
               </button>
               <button
                 type="button"

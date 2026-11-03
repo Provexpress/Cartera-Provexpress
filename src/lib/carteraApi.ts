@@ -583,8 +583,49 @@ export async function fetchCarteraCompleta(
   const rawRecibosList: any[] = jsonRecibos.response || [];
   const rawNotasList: any[] = jsonNotas.response || [];
 
-  // Enriquecer cartera
-  const records: CarteraRecord[] = rawCarteraList.map((r, i) => enrichCarteraRecord(r, i));
+  // Filtrar para que la cartera contenga ESTRICTAMENTE Facturas de Venta
+  // Las notas crédito se excluyen de facturas y se gestionan en su módulo dedicado 'Notas Crédito'
+  const rawInvoicesList: any[] = [];
+  const rawCarteraNotasList: any[] = [];
+
+  rawCarteraList.forEach((r: any) => {
+    const tipo = String(r.Tipo_Documento || '').toLowerCase();
+    const prefijo = String(r.Prefijo || '').toUpperCase();
+    const saldo = Number(r.Valor_Saldo) || 0;
+    const isNota = tipo.includes('nota') || prefijo.startsWith('NC') || saldo < 0;
+
+    if (isNota) {
+      rawCarteraNotasList.push(r);
+    } else {
+      rawInvoicesList.push(r);
+    }
+  });
+
+  // Combinar notas crédito del endpoint de notas con cualquier nota del endpoint de cartera
+  const existingNotaKeys = new Set(
+    rawNotasList.map((n: any) => `${String(n.Prefijo || '').trim()}-${Number(n.Numero) || 0}`.toUpperCase())
+  );
+  rawCarteraNotasList.forEach((cn: any) => {
+    const key = `${String(cn.Prefijo || '').trim()}-${Number(cn.Numero) || 0}`.toUpperCase();
+    if (!existingNotaKeys.has(key)) {
+      rawNotasList.push({
+        Grupo_Personal: cn.Grupo_Comercial || '',
+        Nombre_Empleado: cn.Nombre_Empleado || '',
+        Identificacion: cn.Identificacion || '',
+        Empresa: cn.Empresa || '',
+        Prefijo: cn.Prefijo || 'NCE',
+        Numero: cn.Numero || 0,
+        Fecha_Emision: cn.Fecha_Emision || '',
+        Valor_NotaCredito: Math.abs(Number(cn.Valor_Saldo) || 0),
+        Prefijo_Factura: '',
+        Numero_Factura: 0,
+      });
+      existingNotaKeys.add(key);
+    }
+  });
+
+  // Enriquecer facturas puras de cartera
+  const records: CarteraRecord[] = rawInvoicesList.map((r, i) => enrichCarteraRecord(r, i));
 
   // Mapa de facturas y clientes para cruce y correlación de recibos y notas
   const invoiceLookup = new Map<string, CarteraRecord>();
