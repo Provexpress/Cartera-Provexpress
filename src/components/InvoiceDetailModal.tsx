@@ -31,6 +31,7 @@ import {
   type ClientContact,
 } from '../lib/clientContactsStorage';
 import { ClientContactModal } from './ClientContactModal';
+import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
   record: CarteraRecord | null;
@@ -41,6 +42,7 @@ interface Props {
 export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
   if (!record) return null;
 
+  useModalScrollLock(true, onClose);
   const [activeTab, setActiveTab] = useState<'productos' | 'bitacora'>('productos');
   const [gestiones, setGestiones] = useState<CarteraGestion[]>([]);
   const [loadingGestiones, setLoadingGestiones] = useState(false);

@@ -15,6 +15,7 @@ import {
 import type { CustomerSummary, UserProfile } from '../types';
 import { formatCurrency } from '../lib/carteraApi';
 import { saveClientContact, type ClientContact } from '../lib/clientContactsStorage';
+import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
   customer: CustomerSummary;
@@ -31,6 +32,7 @@ export function ClientContactModal({
   onClose,
   onSaved,
 }: Props) {
+  useModalScrollLock(true, onClose);
   const [correo, setCorreo] = useState(existingContact?.correoTesoreria || '');
   const [contacto, setContacto] = useState(existingContact?.contactoTesoreria || '');
   const [telefono, setTelefono] = useState(existingContact?.telefonoTesoreria || '');

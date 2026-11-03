@@ -6,6 +6,7 @@ import { acquireMailToken } from '../lib/auth';
 import { sendMailViaGraph } from '../lib/emailSender';
 import { generateCarteraExcel } from '../lib/excelGenerator';
 import { buildCarteraEmailHtml } from '../lib/carteraEmailTemplate';
+import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
   carteraData: CarteraDataState;
@@ -20,6 +21,7 @@ export function EmailNotificationModal({
   targetExecutive,
   onClose,
 }: Props) {
+  useModalScrollLock(true, onClose);
   const [recipientEmail, setRecipientEmail] = useState<string>(() => {
     if (targetExecutive?.email) return targetExecutive.email;
     if (targetGroup?.directorEmail) return targetGroup.directorEmail;

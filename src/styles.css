@@ -3532,14 +3532,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .email-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
   padding: 16px;
+  overscroll-behavior: contain;
   animation: fadeInModal 0.2s ease-out;
 }
 
@@ -3555,10 +3556,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   max-width: 980px;
   max-height: 90vh;
   border-radius: 18px;
-  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.45);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
   border: 1px solid #cbd5e1;
 }
 
@@ -5014,17 +5016,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 }
 
 /* 8. MODAL DE DETALLE Y CORREOS */
+body.modal-open {
+  overflow: hidden !important;
+  touch-action: none;
+  overscroll-behavior: none !important;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
-  background: rgba(15, 23, 42, 0.65);
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
   padding: 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-container,
@@ -5032,12 +5041,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   background: #ffffff !important;
   border-radius: 20px;
   width: min(580px, 100%);
-  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 25px 70px -10px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(226, 232, 240, 0.9);
   display: flex;
   flex-direction: column;
   max-height: 92vh;
   overflow: hidden;
+  overscroll-behavior: contain;
   position: relative;
   z-index: 10;
   animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);

@@ -16,6 +16,7 @@ import {
 import type { CarteraRecord, CustomerSummary } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 import { getClientContact } from '../lib/clientContactsStorage';
+import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
   customer: CustomerSummary;
@@ -32,6 +33,7 @@ export function CustomerInvoicesModal({
   onSelectInvoice,
   onEditContact,
 }: Props) {
+  useModalScrollLock(true, onClose);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'current'>('all');
   const [isExporting, setIsExporting] = useState(false);

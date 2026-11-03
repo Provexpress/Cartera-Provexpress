@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { CarteraRecord, ExecutiveSummary, GroupSummary } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
+import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
   executive: ExecutiveSummary | null;
@@ -33,6 +34,7 @@ export function ExecutiveInvoicesModal({
 }: Props) {
   if (!executive) return null;
 
+  useModalScrollLock(true, onClose);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'current'>('all');
   const [isExporting, setIsExporting] = useState(false);
