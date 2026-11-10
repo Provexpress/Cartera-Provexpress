@@ -505,39 +505,6 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
           </tbody>
         </table>
 
-        <!-- 5. BANNERS DE MAYOR IMPACTO (MAYOR VALOR Y MAYOR MORA) -->
-        ${(summary.topMayorValor || summary.topMayorMora) ? `
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;">
-          ${summary.topMayorValor ? `
-          <tr>
-            <td width="30" valign="middle" align="center" style="font-size: 18px;">🏆</td>
-            <td valign="middle">
-              <span style="font-size: 10.5px; font-weight: 700; color: #15803D; text-transform: uppercase;">Mayor Valor:</span>
-              <strong style="font-size: 12px; color: #0F172A; margin-left: 4px;">${summary.topMayorValor.Prefijo} ${summary.topMayorValor.Numero}</strong>
-              <span style="font-size: 11.5px; color: #475569; margin-left: 6px;">${summary.topMayorValor.Empresa}</span>
-              <span style="font-size: 11px; color: #64748B;">(${summary.topMayorValor.Nombre_Empleado})</span>
-            </td>
-            <td align="right" valign="middle">
-              <span style="font-size: 13px; font-weight: 900; color: #15803D;">${formatCOP(summary.topMayorValor.Valor_Saldo)}</span>
-            </td>
-          </tr>
-          ` : ''}
-          ${summary.topMayorMora && summary.topMayorMora.Dias_Vencimiento > 0 ? `
-          <tr>
-            <td width="30" valign="middle" align="center" style="font-size: 18px; padding-top: 6px;">⏳</td>
-            <td valign="middle" style="padding-top: 6px;">
-              <span style="font-size: 10.5px; font-weight: 700; color: #003366; text-transform: uppercase;">Mayor Mora:</span>
-              <strong style="font-size: 12px; color: #0F172A; margin-left: 4px;">${summary.topMayorMora.Prefijo} ${summary.topMayorMora.Numero}</strong>
-              <span style="font-size: 11.5px; color: #475569; margin-left: 6px;">${summary.topMayorMora.Empresa}</span>
-              <span style="font-size: 11px; color: #003366; font-weight: 700; margin-left: 6px;">${summary.topMayorMora.Dias_Vencimiento} días vencida</span>
-            </td>
-            <td align="right" valign="middle" style="padding-top: 6px;">
-              <span style="font-size: 12.5px; font-weight: 800; color: #003366;">${formatCOP(summary.topMayorMora.Valor_Saldo)}</span>
-            </td>
-          </tr>
-          ` : ''}
-        </table>
-        ` : ''}
 
         <!-- 6. BANNER VERDE EXCEL ADJUNTO (ESTILO REMISIONES) -->
         <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;">

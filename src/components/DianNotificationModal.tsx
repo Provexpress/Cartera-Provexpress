@@ -113,9 +113,6 @@ export function DianNotificationModal({
     'estrategica',
   ]);
 
-  // Modo de asunto: con prefijo [PRUEBA] o definitivo
-  const [isTestMode, setIsTestMode] = useState<boolean>(true);
-
   // Estados de ejecución
   const [isSending, setIsSending] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -205,9 +202,8 @@ export function DianNotificationModal({
     }
   };
 
-  // Construcción del asunto oficial
+  // Asunto oficial base
   const baseSubject = `Consolidado Estado Facturación Eventos DIAN - Corte ${carteraData.fechaCorte}`;
-  const currentSubject = isTestMode ? `[PRUEBA] ${baseSubject}` : baseSubject;
 
   if (!isOpen) return null;
 
@@ -383,7 +379,7 @@ export function DianNotificationModal({
         recipientEmail: OFFICIAL_SENDER_EMAIL,
         recipientName: OFFICIAL_SENDER_NAME,
         role: 'Oficial',
-        detail: `🚀 Iniciando despacho: "${currentSubject}" · Total: ${activeRecipients.length} destinatarios autorizados`,
+        detail: `🚀 Iniciando despacho oficial: "${baseSubject}" · Total: ${activeRecipients.length} destinatarios autorizados`,
       };
       setLogs((prev) => [...prev, startLog]);
 
@@ -399,12 +395,12 @@ export function DianNotificationModal({
         const res = await sendMailViaGraph(token, {
           toEmail: target.email,
           toName: target.name,
-          subject: currentSubject,
+          subject: baseSubject,
           htmlBody: generateDianEmailHtml(summary),
           excelAttachment,
           senderEmail: OFFICIAL_SENDER_EMAIL,
           senderName: OFFICIAL_SENDER_NAME,
-          category: isTestMode ? 'prueba' : 'gerencia',
+          category: 'gerencia',
         });
 
         processed++;
@@ -418,7 +414,7 @@ export function DianNotificationModal({
           recipientEmail: target.email,
           recipientName: target.name,
           role: 'Oficial',
-          detail: `Enviado a ${target.name} · "${currentSubject}" · Excel 3 Hojas adjunto`,
+          detail: `Enviado a ${target.name} · "${baseSubject}" · Excel 3 Hojas adjunto`,
           error: res.error,
         };
         setLogs((prev) => [...prev, logItem]);
@@ -434,13 +430,13 @@ export function DianNotificationModal({
         recipientEmail: OFFICIAL_SENDER_EMAIL,
         recipientName: OFFICIAL_SENDER_NAME,
         role: 'Oficial',
-        detail: `✅ DESPACHO DIAN FINALIZADO: ${processed} correos enviados con éxito a la lista autorizada.`,
+        detail: `✅ DESPACHO OFICIAL FINALIZADO: ${processed} correos enviados con éxito a la lista autorizada.`,
       };
       setLogs((prev) => [...prev, endLog]);
 
       setAlertMessage({
         type: 'success',
-        text: `¡Despacho finalizado con éxito! Se enviaron ${processed} correos a los destinatarios autorizados con el asunto "${currentSubject}".`,
+        text: `¡Despacho oficial finalizado con éxito! Se enviaron ${processed} correos a los destinatarios autorizados con el asunto "${baseSubject}".`,
       });
     } catch (err: any) {
       setAlertMessage({
@@ -759,7 +755,7 @@ export function DianNotificationModal({
             </div>
           </div>
 
-          {/* BARRA DE CONFIGURACIÓN DE ASUNTO Y MODO PRUEBA */}
+          {/* BARRA DE ASUNTO OFICIAL */}
           <div
             style={{
               margin: '8px 24px',
@@ -781,39 +777,20 @@ export function DianNotificationModal({
               <code
                 style={{
                   background: '#ffffff',
-                  border: '1px solid #CBD5E1',
+                  border: '1.5px solid #003366',
                   borderRadius: 6,
-                  padding: '3px 8px',
+                  padding: '4px 10px',
                   fontSize: 12,
-                  fontWeight: 700,
-                  color: isTestMode ? '#B45309' : '#003366',
+                  fontWeight: 750,
+                  color: '#003366',
                 }}
               >
-                {currentSubject}
+                {baseSubject}
               </code>
             </div>
-
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                fontSize: 12,
-                fontWeight: 700,
-                color: isTestMode ? '#B45309' : '#475569',
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isTestMode}
-                onChange={(e) => setIsTestMode(e.target.checked)}
-                disabled={isSending}
-                style={{ width: 15, height: 15, cursor: 'pointer' }}
-              />
-              <span>Incluir prefijo <strong>[PRUEBA]</strong> en el asunto para este envío</span>
-            </label>
+            <span style={{ fontSize: 11, color: '#64748B' }}>
+              El botón de prueba añade automáticamente el prefijo <code>[PRUEBA]</code>
+            </span>
           </div>
 
           {/* BANNER INFORMATIVO DEL EXCEL ADJUNTO DE 3 HOJAS & DESCARGA LOCAL */}
@@ -957,9 +934,7 @@ export function DianNotificationModal({
                 ) : (
                   <>
                     <Send size={15} />
-                    <span>
-                      {isTestMode ? 'Enviar como Prueba' : 'Iniciar Despacho Oficial'} ({activeRecipients.length})
-                    </span>
+                    <span>Iniciar Despacho Oficial ({activeRecipients.length})</span>
                   </>
                 )}
               </button>
