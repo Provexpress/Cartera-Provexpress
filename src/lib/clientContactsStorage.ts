@@ -44,14 +44,39 @@ export function getClientContact(nit: string): ClientContact | null {
 }
 
 /**
+ * Validador de formato de correo electrónico
+ */
+export function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim();
+  const regex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  return regex.test(trimmed);
+}
+
+/**
+ * Parsea y normaliza una cadena con uno o múltiples correos electrónicos.
+ * Soporta separadores comunes: comas (,), punto y comas (;), barras (/), espacios y saltos de línea.
+ * Elimina duplicados y espacios residuales.
+ */
+export function parseAndNormalizeEmails(rawEmailStr?: string | null): string[] {
+  if (!rawEmailStr) return [];
+  const parts = String(rawEmailStr)
+    .split(/[,;/\s\n\r]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+/**
  * Guarda o actualiza un contacto de tesorería de cliente
  */
 export async function saveClientContact(contact: Omit<ClientContact, 'actualizadoEl'> & { actualizadoEl?: string }): Promise<ClientContact> {
   const cleanNit = String(contact.nit).trim();
+  const normalizedEmails = parseAndNormalizeEmails(contact.correoTesoreria);
   const record: ClientContact = {
     ...contact,
     nit: cleanNit,
-    correoTesoreria: (contact.correoTesoreria || '').trim(),
+    correoTesoreria: normalizedEmails.length > 0 ? normalizedEmails.join(', ') : (contact.correoTesoreria || '').trim(),
     contactoTesoreria: (contact.contactoTesoreria || '').trim(),
     telefonoTesoreria: (contact.telefonoTesoreria || '').trim(),
     observaciones: (contact.observaciones || '').trim(),

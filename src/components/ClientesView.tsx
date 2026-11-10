@@ -27,6 +27,7 @@ import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
 import {
   getAllClientContacts,
   syncClientContactsFromSupabase,
+  parseAndNormalizeEmails,
   type ClientContact,
 } from '../lib/clientContactsStorage';
 import { ClientContactModal } from './ClientContactModal';
@@ -551,8 +552,8 @@ export function ClientesView({
               ) : (
                 paginatedCustomers.map((cust) => {
                   const contact = contacts[cust.nit];
-                  const email = contact?.correoTesoreria?.trim() || cust.correoCliente?.trim() || '';
-                  const hasEmail = Boolean(email.length > 0);
+                  const emailList = parseAndNormalizeEmails(contact?.correoTesoreria || cust.correoCliente);
+                  const hasEmail = emailList.length > 0;
                   const isFromSiesa = Boolean(!contact?.correoTesoreria?.trim() && cust.correoCliente?.trim());
                   const pctVencido = cust.totalSaldo > 0 ? (cust.totalVencido / cust.totalSaldo) * 100 : 0;
 
@@ -649,41 +650,108 @@ export function ClientesView({
                       {/* 5. Contacto Tesorería */}
                       <td style={{ padding: '12px 14px', verticalAlign: 'top' }}>
                         {hasEmail ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <a
-                                href={`mailto:${email}`}
-                                style={{
-                                  color: '#2563eb',
-                                  fontWeight: 700,
-                                  textDecoration: 'none',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 5,
-                                  fontSize: 12.5,
-                                }}
-                                title={`Enviar correo a ${email}`}
-                              >
-                                <Mail size={13} />
-                                <span style={{ wordBreak: 'break-all' }}>{email}</span>
-                              </a>
-                              {isFromSiesa && (
-                                <span
-                                  className="badge"
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {emailList.length === 1 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <a
+                                  href={`mailto:${emailList[0]}`}
                                   style={{
-                                    fontSize: 9.5,
-                                    padding: '1px 5px',
-                                    backgroundColor: '#e0f2fe',
-                                    color: '#0369a1',
+                                    color: '#2563eb',
                                     fontWeight: 700,
-                                    borderRadius: 4,
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 12.5,
                                   }}
-                                  title="Correo registrado en Siesa (tesorería o contabilidad)"
+                                  title={`Enviar correo a ${emailList[0]}`}
                                 >
-                                  ERP Siesa
-                                </span>
-                              )}
-                            </div>
+                                  <Mail size={13} />
+                                  <span style={{ wordBreak: 'break-all' }}>{emailList[0]}</span>
+                                </a>
+                                {isFromSiesa && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      fontSize: 9.5,
+                                      padding: '1px 5px',
+                                      backgroundColor: '#e0f2fe',
+                                      color: '#0369a1',
+                                      fontWeight: 700,
+                                      borderRadius: 4,
+                                    }}
+                                    title="Correo registrado en Siesa (tesorería o contabilidad)"
+                                  >
+                                    ERP Siesa
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: '#1e293b',
+                                      backgroundColor: '#f1f5f9',
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    {emailList.length} correos
+                                  </span>
+                                  {isFromSiesa && (
+                                    <span
+                                      className="badge"
+                                      style={{
+                                        fontSize: 9.5,
+                                        padding: '1px 5px',
+                                        backgroundColor: '#e0f2fe',
+                                        color: '#0369a1',
+                                        fontWeight: 700,
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      ERP Siesa
+                                    </span>
+                                  )}
+                                  <a
+                                    href={`mailto:${emailList.join(',')}`}
+                                    style={{
+                                      fontSize: 11,
+                                      color: '#0284c7',
+                                      textDecoration: 'none',
+                                      fontWeight: 700,
+                                    }}
+                                    title="Abrir correo para todos los destinatarios"
+                                  >
+                                    ✉ Escribir a todos
+                                  </a>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {emailList.map((em) => (
+                                    <a
+                                      key={em}
+                                      href={`mailto:${em}`}
+                                      style={{
+                                        color: '#2563eb',
+                                        fontWeight: 600,
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        fontSize: 12,
+                                      }}
+                                      title={`Enviar correo individual a ${em}`}
+                                    >
+                                      <Mail size={11} color="#64748b" />
+                                      <span style={{ wordBreak: 'break-all' }}>{em}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {contact?.contactoTesoreria && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475569', fontSize: 12 }}>
                                 <User size={12} color="#64748b" />

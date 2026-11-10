@@ -14,7 +14,12 @@ import {
 } from 'lucide-react';
 import type { CustomerSummary, UserProfile } from '../types';
 import { formatCurrency } from '../lib/carteraApi';
-import { saveClientContact, type ClientContact } from '../lib/clientContactsStorage';
+import {
+  saveClientContact,
+  type ClientContact,
+  isValidEmail,
+  parseAndNormalizeEmails,
+} from '../lib/clientContactsStorage';
 import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
@@ -47,13 +52,12 @@ export function ClientContactModal({
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validación básica de correo si se ingresó algo
-    if (correo.trim()) {
-      const emailList = correo.split(/[,;\s]+/).filter(Boolean);
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const invalid = emailList.find((em) => !emailRegex.test(em));
+    // Validación de uno o múltiples correos
+    const emailList = parseAndNormalizeEmails(correo);
+    if (emailList.length > 0) {
+      const invalid = emailList.find((em) => !isValidEmail(em));
       if (invalid) {
-        setErrorMsg(`El correo "${invalid}" no tiene un formato válido.`);
+        setErrorMsg(`El correo "${invalid}" no tiene un formato válido. Verifica que esté bien escrito (ej: tesoreria@empresa.com).`);
         return;
       }
     }
@@ -64,7 +68,7 @@ export function ClientContactModal({
         nit: customer.nit,
         dv: customer.dv,
         empresa: customer.empresa,
-        correoTesoreria: correo.trim(),
+        correoTesoreria: emailList.length > 0 ? emailList.join(', ') : '',
         contactoTesoreria: contacto.trim(),
         telefonoTesoreria: telefono.trim(),
         observaciones: observaciones.trim(),
@@ -284,8 +288,41 @@ export function ClientContactModal({
                 }}
               />
               <span style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, display: 'block' }}>
-                Puede ingresar varios correos separándolos por coma (,) o punto y coma (;).
+                Puede ingresar varios correos separándolos por coma (,), punto y coma (;) o barra (/).
               </span>
+
+              {parseAndNormalizeEmails(correo).length > 0 && (
+                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
+                    {parseAndNormalizeEmails(correo).length === 1 ? '1 correo detectado:' : `${parseAndNormalizeEmails(correo).length} correos detectados (se guardarán todos):`}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {parseAndNormalizeEmails(correo).map((em) => {
+                      const valid = isValidEmail(em);
+                      return (
+                        <span
+                          key={em}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 11.5,
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            backgroundColor: valid ? '#f0fdf4' : '#fef2f2',
+                            color: valid ? '#15803d' : '#b91c1c',
+                            border: `1px solid ${valid ? '#bbf7d0' : '#fecaca'}`,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {valid ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                          <span>{em}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {customer.correoCliente && !existingContact?.correoTesoreria && (
                 <div
                   style={{

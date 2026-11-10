@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { CarteraRecord, CustomerSummary } from '../types';
 import { formatCurrency, formatNumber, formatPercent } from '../lib/carteraApi';
-import { getClientContact } from '../lib/clientContactsStorage';
+import { getClientContact, parseAndNormalizeEmails } from '../lib/clientContactsStorage';
 import { useModalScrollLock } from '../lib/useModalScrollLock';
 
 interface Props {
@@ -212,12 +212,48 @@ export function CustomerInvoicesModal({
                   Correo de Tesorería:{' '}
                   {effectiveEmail ? (
                     <>
-                      <a
-                        href={`mailto:${effectiveEmail}`}
-                        style={{ color: '#15803d', fontWeight: 700, textDecoration: 'none' }}
-                      >
-                        {effectiveEmail}
-                      </a>
+                      {(() => {
+                        const emailList = parseAndNormalizeEmails(effectiveEmail);
+                        if (emailList.length <= 1) {
+                          return (
+                            <a
+                              href={`mailto:${emailList[0] || effectiveEmail}`}
+                              style={{ color: '#15803d', fontWeight: 700, textDecoration: 'none' }}
+                            >
+                              {emailList[0] || effectiveEmail}
+                            </a>
+                          );
+                        }
+                        return (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {emailList.map((em) => (
+                              <a
+                                key={em}
+                                href={`mailto:${em}`}
+                                style={{ color: '#15803d', fontWeight: 700, textDecoration: 'underline' }}
+                                title={`Enviar correo a ${em}`}
+                              >
+                                {em}
+                              </a>
+                            ))}
+                            <a
+                              href={`mailto:${emailList.join(',')}`}
+                              style={{
+                                fontSize: 11,
+                                color: '#0284c7',
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                                padding: '1px 5px',
+                                backgroundColor: '#e0f2fe',
+                                borderRadius: 4,
+                              }}
+                              title="Escribir a todos los correos"
+                            >
+                              ✉ A todos ({emailList.length})
+                            </a>
+                          </span>
+                        );
+                      })()}
                       <span
                         style={{
                           fontSize: 10,

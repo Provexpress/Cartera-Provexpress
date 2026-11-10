@@ -32,6 +32,7 @@ import {
 } from '../lib/supabaseClient';
 import {
   getClientContact,
+  parseAndNormalizeEmails,
   type ClientContact,
 } from '../lib/clientContactsStorage';
 import { ClientContactModal } from './ClientContactModal';
@@ -263,19 +264,60 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
                       </span>
                       {effectiveEmail ? (
                         <>
-                          <a
-                            href={`mailto:${effectiveEmail}`}
-                            style={{
-                              fontSize: 13,
-                              color: '#15803d',
-                              fontWeight: 700,
-                              textDecoration: 'none',
-                              wordBreak: 'break-all',
-                            }}
-                            title="Enviar correo de cobro"
-                          >
-                            {effectiveEmail}
-                          </a>
+                          {(() => {
+                            const emailList = parseAndNormalizeEmails(effectiveEmail);
+                            if (emailList.length <= 1) {
+                              return (
+                                <a
+                                  href={`mailto:${emailList[0] || effectiveEmail}`}
+                                  style={{
+                                    fontSize: 13,
+                                    color: '#15803d',
+                                    fontWeight: 700,
+                                    textDecoration: 'none',
+                                    wordBreak: 'break-all',
+                                  }}
+                                  title="Enviar correo de cobro"
+                                >
+                                  {emailList[0] || effectiveEmail}
+                                </a>
+                              );
+                            }
+                            return (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                {emailList.map((em) => (
+                                  <a
+                                    key={em}
+                                    href={`mailto:${em}`}
+                                    style={{
+                                      fontSize: 12.5,
+                                      color: '#15803d',
+                                      fontWeight: 700,
+                                      textDecoration: 'underline',
+                                    }}
+                                    title={`Enviar correo individual a ${em}`}
+                                  >
+                                    {em}
+                                  </a>
+                                ))}
+                                <a
+                                  href={`mailto:${emailList.join(',')}`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#0284c7',
+                                    fontWeight: 800,
+                                    textDecoration: 'none',
+                                    padding: '1px 5px',
+                                    backgroundColor: '#e0f2fe',
+                                    borderRadius: 4,
+                                  }}
+                                  title="Escribir a todos los correos registrados"
+                                >
+                                  ✉ A todos ({emailList.length})
+                                </a>
+                              </div>
+                            );
+                          })()}
                           <span
                             style={{
                               fontSize: 10,

@@ -9,7 +9,7 @@ import type {
   NotaCreditoRecord,
   ReciboCajaRecord,
 } from '../types';
-import type { ClientContact } from './clientContactsStorage';
+import { type ClientContact, parseAndNormalizeEmails } from './clientContactsStorage';
 
 // ─── PALETAS Y ESTILOS CORPORATIVOS PROVEXPRESS SAS ─────────────────────────
 const CURRENCY_FMT = '"$"#,##0;[Red]-"$"#,##0;"$0"';
@@ -1487,7 +1487,7 @@ export async function generateCustomerDirectoryExcel(
       saldoVencido: c.totalVencido,
       pctVencido: pctVenc,
       docCount: c.docCount,
-      correoTesoreria: contact?.correoTesoreria || c.correoCliente || '',
+      correoTesoreria: parseAndNormalizeEmails(contact?.correoTesoreria || c.correoCliente).join('; '),
       contactoTesoreria: contact?.contactoTesoreria || '',
       telefonoTesoreria: contact?.telefonoTesoreria || '',
       observaciones: contact?.observaciones || '',
