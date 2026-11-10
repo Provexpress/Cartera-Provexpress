@@ -1006,7 +1006,7 @@ export function DianNotificationModal({
                 <div className="dispatch-terminal-empty">
                   <Terminal size={24} style={{ opacity: 0.3 }} />
                   <p>
-                    Listo para despachar. Haz clic en <strong>"Enviar Prueba a Mi Correo"</strong> para validar el formato o en <strong>"Iniciar Despacho Oficial"</strong>.
+                    Listo para despachar. Haz clic en <strong>"Enviar Prueba (Especialista & Cuentas Estratégicas)"</strong> para validar el formato o en <strong>"Iniciar Despacho Oficial"</strong>.
                   </p>
                 </div>
               ) : (
