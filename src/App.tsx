@@ -61,6 +61,7 @@ const EvolucionBaseView = lazy(() => import('./components/EvolucionBaseView').th
 const GestionDiaADiaView = lazy(() => import('./components/GestionDiaADiaView').then((m) => ({ default: m.GestionDiaADiaView })));
 const InvoiceDetailModal = lazy(() => import('./components/InvoiceDetailModal').then((m) => ({ default: m.InvoiceDetailModal })));
 const EmailNotificationModal = lazy(() => import('./components/EmailNotificationModal').then((m) => ({ default: m.EmailNotificationModal })));
+const DianNotificationModal = lazy(() => import('./components/DianNotificationModal').then((m) => ({ default: m.DianNotificationModal })));
 const ClientesView = lazy(() => import('./components/ClientesView').then((m) => ({ default: m.ClientesView })));
 import { DateControlBar, type DatePreset, type DateCriterion } from './components/DateControlBar';
 
@@ -219,8 +220,15 @@ export function App() {
   // Modales
   const [selectedInvoice, setSelectedInvoice] = useState<CarteraRecord | null>(null);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [dianModalOpen, setDianModalOpen] = useState(false);
   const [emailTargetGroup, setEmailTargetGroup] = useState<GroupSummary | undefined>();
   const [emailTargetExec, setEmailTargetExec] = useState<ExecutiveSummary | undefined>();
+
+  // Facturas en reclamo ante la DIAN (Evento 031)
+  const reclamosDianCount = useMemo(() => {
+    if (!carteraData?.records) return 0;
+    return carteraData.records.filter((r) => String(r.Codigo_Evento_DIAN || '').trim() === '031').length;
+  }, [carteraData?.records]);
 
   // Estados de autenticación y puerta de acceso (Auth Gate)
   const [authChecking, setAuthChecking] = useState(true);
@@ -867,6 +875,46 @@ export function App() {
               <span>Notificar M365</span>
             </button>
 
+            <button
+              type="button"
+              className="button button-sm button-secondary"
+              onClick={() => setDianModalOpen(true)}
+              title="Consola de despacho y trazabilidad de eventos DIAN & RADIAN"
+              style={{
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                borderColor: reclamosDianCount > 0 ? '#FECACA' : undefined,
+                background: reclamosDianCount > 0 ? '#FEF2F2' : undefined,
+                color: reclamosDianCount > 0 ? '#DC2626' : undefined,
+                fontWeight: 650,
+              }}
+            >
+              <ShieldAlert size={13} color={reclamosDianCount > 0 ? '#DC2626' : undefined} />
+              <span>Notificar DIAN</span>
+              {reclamosDianCount > 0 && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 999,
+                    background: '#DC2626',
+                    color: '#ffffff',
+                    fontSize: 10,
+                    fontWeight: 800,
+                    padding: '0 4px',
+                  }}
+                  title={`${reclamosDianCount} facturas en reclamo ante la DIAN (Evento 031)`}
+                >
+                  {reclamosDianCount}
+                </span>
+              )}
+            </button>
+
             {user ? (
               <div className="user-profile-badge" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="user-avatar-circle" title={user.email}>
@@ -1233,6 +1281,15 @@ export function App() {
               setEmailTargetGroup(undefined);
               setEmailTargetExec(undefined);
             }}
+          />
+        )}
+
+        {dianModalOpen && carteraData && (
+          <DianNotificationModal
+            isOpen={dianModalOpen}
+            onClose={() => setDianModalOpen(false)}
+            carteraData={carteraData}
+            currentUserEmail={user?.email}
           />
         )}
       </Suspense>
