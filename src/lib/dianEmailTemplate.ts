@@ -451,17 +451,17 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
           </tr>
         </table>
 
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1.5px solid #003366; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #CBD5E1; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
           <thead>
-            <tr style="background: linear-gradient(135deg, #003366 0%, #1E3A8A 100%); color: #FFFFFF;">
-              <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Factura</th>
-              <th style="padding: 8px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Cliente / Razón Social</th>
-              <th style="padding: 8px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Ejecutivo Asignado</th>
-              <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 95px;">Fecha Reclamo</th>
-              <th style="padding: 8px 12px; text-align: right; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 110px;">Saldo ($ COP)</th>
+            <tr bgcolor="#003366" style="background-color: #003366; color: #FFFFFF;">
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 10px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Factura</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 10px; text-align: left; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Cliente / Razón Social</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 10px; text-align: left; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Ejecutivo Asignado</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 10px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 95px;">Fecha Reclamo</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 12px; text-align: right; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 110px;">Saldo ($ COP)</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody style="background-color: #FFFFFF;">
             ${rowsReclamosHtml}
           </tbody>
         </table>
@@ -481,18 +481,18 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
           </tr>
         </table>
 
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #CBD5E1; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
           <thead>
-            <tr style="background-color: #0F172A; color: #FFFFFF;">
-              <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Dirección & Grupo</th>
-              <th style="padding: 8px 8px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Facturas</th>
-              <th style="padding: 8px 8px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">031 Reclamo</th>
-              <th style="padding: 8px 8px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 90px;">N/D Sin Acuse</th>
-              <th style="padding: 8px 8px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">033 Aceptada</th>
-              <th style="padding: 8px 12px; text-align: right; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Saldo Total COP</th>
+            <tr bgcolor="#003366" style="background-color: #003366; color: #FFFFFF;">
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Dirección & Grupo</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 8px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Facturas</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 8px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">031 Reclamo</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 8px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 90px;">N/D Sin Acuse</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 8px; text-align: center; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">033 Aceptada</th>
+              <th bgcolor="#003366" style="background-color: #003366; color: #FFFFFF; padding: 9px 12px; text-align: right; font-size: 11px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Saldo Total COP</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody style="background-color: #FFFFFF;">
             ${rowsGroupsHtml}
             <tr style="background-color: #F1F5F9; border-top: 2px solid #CBD5E1;">
               <td style="padding: 9px 12px; font-size: 12px; font-weight: 900; color: #0F172A;">TOTAL COMPAÑÍA</td>
