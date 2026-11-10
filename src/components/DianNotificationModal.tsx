@@ -186,24 +186,36 @@ export function DianNotificationModal({
   };
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ENVIAR PRUEBA A MI CORREO
+  // ENVIAR PRUEBA A ESPECIALISTA Y CUENTAS ESTRATÉGICAS
   // ══════════════════════════════════════════════════════════════════════════
   const handleSendTest = async () => {
-    const targetEmail = currentUserEmail || 'especialista.preventa@provexpress.com.co';
+    const defaultEmail = currentUserEmail || 'especialista.preventa@provexpress.com.co';
+
+    // Lista de prueba solicitada: Especialista Preventa y Cuentas Estratégicas
+    const testList: { email: string; name: string; cargo: string }[] = [
+      {
+        email: defaultEmail,
+        name: 'Especialista Preventa',
+        cargo: 'Prueba Auditoría & Control DIAN',
+      },
+      {
+        email: 'c.estrategica@provexpress.com.co',
+        name: 'Cuentas Estratégicas',
+        cargo: 'Prueba Gerencia Estratégica DIAN',
+      },
+    ];
+
+    // Evitar duplicados si el usuario logueado ya es c.estrategica
+    const uniqueTestRecipients = testList.filter(
+      (item, idx, self) => idx === self.findIndex((t) => t.email.toLowerCase() === item.email.toLowerCase())
+    );
 
     try {
       setIsSendingTest(true);
       setAlertMessage(null);
       const token = await acquireMailToken();
 
-      // 1. Resumen ejecutivo
-      const summary = buildDianEmailSummary(carteraData.records, carteraData.fechaCorte, {
-        name: 'Especialista Preventa',
-        cargo: 'Prueba de Despacho DIAN / RADIAN',
-        email: targetEmail,
-      });
-
-      // 2. Excel oficial de 3 hojas
+      // Generar Excel de 3 hojas una sola vez
       let excelAttachment;
       try {
         const { filename, base64 } = await generateDianReportExcel(
@@ -215,41 +227,57 @@ export function DianNotificationModal({
         console.warn('Error generando Excel de prueba DIAN:', e);
       }
 
-      // 3. Envío M365
-      const res = await sendMailViaGraph(token, {
-        toEmail: targetEmail,
-        toName: 'Especialista Preventa (Prueba DIAN)',
-        subject: `[PRUEBA] Consolidado DIAN / RADIAN · Cartera Provexpress · Corte ${carteraData.fechaCorte}`,
-        htmlBody: generateDianEmailHtml(summary),
-        excelAttachment,
-        senderEmail: OFFICIAL_SENDER_EMAIL,
-        senderName: OFFICIAL_SENDER_NAME,
-        category: 'prueba',
-      });
+      let testSuccessCount = 0;
 
-      const entry: DianDispatchLogEntry = {
-        id: `test-${Date.now()}`,
-        time: res.timestamp || new Date().toLocaleTimeString('es-CO', { hour12: false }),
-        httpStatus: res.httpStatus || (res.success ? 202 : 500),
-        success: res.success,
-        recipientEmail: targetEmail,
-        recipientName: 'Especialista Preventa',
-        role: 'Prueba',
-        detail: `Prueba de trazabilidad DIAN despachada (${carteraData.records.length} facturas, 8 rechazos) · Excel adjunto`,
-        error: res.error,
-      };
+      for (const target of uniqueTestRecipients) {
+        const summary = buildDianEmailSummary(carteraData.records, carteraData.fechaCorte, {
+          name: target.name,
+          cargo: target.cargo,
+          email: target.email,
+        });
 
-      setLogs((prev) => [...prev, entry]);
+        const res = await sendMailViaGraph(token, {
+          toEmail: target.email,
+          toName: `${target.name} (Prueba DIAN)`,
+          subject: `[PRUEBA] Consolidado DIAN / RADIAN · Cartera Provexpress · Corte ${carteraData.fechaCorte}`,
+          htmlBody: generateDianEmailHtml(summary),
+          excelAttachment,
+          senderEmail: OFFICIAL_SENDER_EMAIL,
+          senderName: OFFICIAL_SENDER_NAME,
+          category: 'prueba',
+        });
 
-      if (res.success) {
+        const entry: DianDispatchLogEntry = {
+          id: `test-${target.email}-${Date.now()}`,
+          time: res.timestamp || new Date().toLocaleTimeString('es-CO', { hour12: false }),
+          httpStatus: res.httpStatus || (res.success ? 202 : 500),
+          success: res.success,
+          recipientEmail: target.email,
+          recipientName: target.name,
+          role: 'Prueba',
+          detail: `Prueba DIAN enviada (${carteraData.records.length} facturas, ${dianStats.totReclamos} rechazos) · Excel adjunto`,
+          error: res.error,
+        };
+
+        setLogs((prev) => [...prev, entry]);
+
+        if (res.success) {
+          testSuccessCount++;
+        }
+
+        // Breve pausa para Microsoft Graph
+        await new Promise((r) => setTimeout(r, 600));
+      }
+
+      if (testSuccessCount > 0) {
         setAlertMessage({
           type: 'success',
-          text: `¡Correo de prueba despachado con éxito a ${targetEmail}! (HTTP ${res.httpStatus || 202} OK). Revisa tu bandeja de entrada de Microsoft 365.`,
+          text: `¡Prueba despachada con éxito a Especialista (${defaultEmail}) y Cuentas Estratégicas (c.estrategica@provexpress.com.co)! Revisa las bandejas de entrada.`,
         });
       } else {
         setAlertMessage({
           type: 'error',
-          text: `Error al enviar prueba: ${res.error || 'Verifica la sesión de Microsoft 365'}`,
+          text: 'No se pudo enviar el correo de prueba. Revisa la consola o la sesión de Microsoft 365.',
         });
       }
     } catch (err: any) {
@@ -751,6 +779,27 @@ export function DianNotificationModal({
                     background: includeCustom ? '#ffffff' : '#f1f5f9',
                   }}
                 />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIncludeCustom(true);
+                      setCustomEmails('especialista.preventa@provexpress.com.co; c.estrategica@provexpress.com.co');
+                    }}
+                    style={{
+                      background: '#F3E8FF',
+                      border: '1px solid #D8B4FE',
+                      color: '#7E22CE',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    + Especialista & C. Estratégicas
+                  </button>
+                </div>
               </div>
               <div className="dispatch-card-foot">
                 <Users size={13} />
@@ -844,31 +893,34 @@ export function DianNotificationModal({
             </div>
 
             <div className="dispatch-action-buttons">
-              {/* Botón de Envío de Prueba a Mi Correo */}
+              {/* Botón de Envío de Prueba a Especialista y Cuentas Estratégicas */}
               <button
                 type="button"
                 className="button button-secondary"
                 onClick={handleSendTest}
                 disabled={isSending || isSendingTest}
-                title={`Envía de inmediato una prueba del reporte a ${currentUserEmail || 'tu correo'}`}
+                title="Envía de inmediato una prueba del reporte a especialista.preventa@provexpress.com.co y c.estrategica@provexpress.com.co"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 7,
-                  fontWeight: 650,
+                  fontWeight: 700,
                   fontSize: 12.5,
                   padding: '8px 14px',
+                  borderColor: '#F59E0B',
+                  background: '#FFFBEB',
+                  color: '#B45309',
                 }}
               >
                 {isSendingTest ? (
                   <>
                     <Loader2 size={15} className="spinner" />
-                    <span>Enviando prueba...</span>
+                    <span>Enviando prueba a 2 correos...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles size={15} color="#D97706" />
-                    <span>Enviar Prueba a Mi Correo</span>
+                    <span>Enviar Prueba (Especialista & Cuentas Estratégicas)</span>
                   </>
                 )}
               </button>
