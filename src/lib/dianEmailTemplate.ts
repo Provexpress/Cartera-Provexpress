@@ -123,7 +123,7 @@ export function buildDianEmailSummary(
   const groupMap = new Map<number, { nombreGrupo: string; director: string; totalCount: number; c031: number; cND: number; c033: number; saldo: number }>();
   [1, 2, 3, 4, 0].forEach((g) => {
     const nombreGrupo = g === 1 ? 'Grupo Novoa' : g === 2 ? 'Grupo Caballero' : g === 3 ? 'Grupo Beltrán' : g === 4 ? 'Grupo Romero' : 'Cuentas Especiales';
-    const director = g === 1 ? 'Adriana Ramírez' : g === 2 ? 'Angela Caballero' : g === 3 ? 'Óscar Beltrán' : g === 4 ? 'Miller Romero' : 'Gerencia / Especiales';
+    const director = g === 1 ? 'Rafael Novoa' : g === 2 ? 'Angélica Caballero' : g === 3 ? 'Óscar Beltrán' : g === 4 ? 'Miller Romero' : 'Gerencia / Especiales';
     groupMap.set(g, { nombreGrupo, director, totalCount: 0, c031: 0, cND: 0, c033: 0, saldo: 0 });
   });
 
