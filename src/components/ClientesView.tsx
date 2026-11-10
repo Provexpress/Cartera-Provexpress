@@ -94,7 +94,11 @@ export function ClientesView({
       totalVencido += c.totalVencido;
       if (c.totalVencido > 0) conVencido += 1;
       const ct = contacts[c.nit];
-      if (ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0) {
+      const hasEmail = Boolean(
+        (ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0) ||
+        (c.correoCliente && c.correoCliente.trim().length > 0)
+      );
+      if (hasEmail) {
         conCorreo += 1;
       }
     });
@@ -128,6 +132,7 @@ export function ClientesView({
           c.comercial.toLowerCase().includes(q) ||
           c.directorNombre.toLowerCase().includes(q) ||
           (ct?.correoTesoreria && ct.correoTesoreria.toLowerCase().includes(q)) ||
+          (c.correoCliente && c.correoCliente.toLowerCase().includes(q)) ||
           (ct?.contactoTesoreria && ct.contactoTesoreria.toLowerCase().includes(q))
         );
       });
@@ -142,12 +147,19 @@ export function ClientesView({
     if (contactFilter === 'with_email') {
       list = list.filter((c) => {
         const ct = contacts[c.nit];
-        return Boolean(ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0);
+        return Boolean(
+          (ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0) ||
+          (c.correoCliente && c.correoCliente.trim().length > 0)
+        );
       });
     } else if (contactFilter === 'without_email') {
       list = list.filter((c) => {
         const ct = contacts[c.nit];
-        return !ct || !ct.correoTesoreria || ct.correoTesoreria.trim().length === 0;
+        const hasMail = Boolean(
+          (ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0) ||
+          (c.correoCliente && c.correoCliente.trim().length > 0)
+        );
+        return !hasMail;
       });
     } else if (contactFilter === 'overdue') {
       list = list.filter((c) => c.totalVencido > 0);
@@ -539,7 +551,9 @@ export function ClientesView({
               ) : (
                 paginatedCustomers.map((cust) => {
                   const contact = contacts[cust.nit];
-                  const hasEmail = Boolean(contact && contact.correoTesoreria && contact.correoTesoreria.trim().length > 0);
+                  const email = contact?.correoTesoreria?.trim() || cust.correoCliente?.trim() || '';
+                  const hasEmail = Boolean(email.length > 0);
+                  const isFromSiesa = Boolean(!contact?.correoTesoreria?.trim() && cust.correoCliente?.trim());
                   const pctVencido = cust.totalSaldo > 0 ? (cust.totalVencido / cust.totalSaldo) * 100 : 0;
 
                   return (
@@ -636,32 +650,50 @@ export function ClientesView({
                       <td style={{ padding: '12px 14px', verticalAlign: 'top' }}>
                         {hasEmail ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <a
-                              href={`mailto:${contact!.correoTesoreria}`}
-                              style={{
-                                color: '#2563eb',
-                                fontWeight: 700,
-                                textDecoration: 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
-                                fontSize: 12.5,
-                              }}
-                              title={`Enviar correo a ${contact!.correoTesoreria}`}
-                            >
-                              <Mail size={13} />
-                              <span style={{ wordBreak: 'break-all' }}>{contact!.correoTesoreria}</span>
-                            </a>
-                            {contact!.contactoTesoreria && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <a
+                                href={`mailto:${email}`}
+                                style={{
+                                  color: '#2563eb',
+                                  fontWeight: 700,
+                                  textDecoration: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  fontSize: 12.5,
+                                }}
+                                title={`Enviar correo a ${email}`}
+                              >
+                                <Mail size={13} />
+                                <span style={{ wordBreak: 'break-all' }}>{email}</span>
+                              </a>
+                              {isFromSiesa && (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: '1px 5px',
+                                    backgroundColor: '#e0f2fe',
+                                    color: '#0369a1',
+                                    fontWeight: 700,
+                                    borderRadius: 4,
+                                  }}
+                                  title="Correo registrado en Siesa (tesorería o contabilidad)"
+                                >
+                                  ERP Siesa
+                                </span>
+                              )}
+                            </div>
+                            {contact?.contactoTesoreria && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475569', fontSize: 12 }}>
                                 <User size={12} color="#64748b" />
-                                <span>{contact!.contactoTesoreria}</span>
+                                <span>{contact.contactoTesoreria}</span>
                               </div>
                             )}
-                            {contact!.telefonoTesoreria && (
+                            {contact?.telefonoTesoreria && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#16a34a', fontSize: 11.5, fontWeight: 600 }}>
                                 <Phone size={11} />
-                                <span>{contact!.telefonoTesoreria}</span>
+                                <span>{contact.telefonoTesoreria}</span>
                               </div>
                             )}
                           </div>

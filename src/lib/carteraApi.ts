@@ -4,6 +4,8 @@ import type {
   CarteraDataState,
   CarteraRecord,
   CustomerSummary,
+  DianEvento,
+  DianStatusInfo,
   ExecutiveSummary,
   GroupSummary,
   NotaCreditoRecord,
@@ -195,6 +197,102 @@ export function getGroupLabel(groupNumber: number): string {
 }
 
 /**
+ * Resuelve el estado DIAN de una factura según el código de evento o lista de eventos RADIAN
+ */
+export function resolveDianStatus(
+  codigoRaw?: string | null,
+  fechaRaw?: string | null,
+  eventosList?: DianEvento[]
+): DianStatusInfo {
+  let code = (codigoRaw || '').trim();
+  let fecha = fechaRaw && fechaRaw !== 'N/D' ? fechaRaw.trim() : undefined;
+
+  if (Array.isArray(eventosList) && eventosList.length > 0) {
+    const has033 = eventosList.find((e) => e.Codigo_Evento === '033' || e.Codigo_Evento === '034');
+    const has031 = eventosList.find((e) => e.Codigo_Evento === '031');
+    const has032 = eventosList.find((e) => e.Codigo_Evento === '032');
+    const has030 = eventosList.find((e) => e.Codigo_Evento === '030');
+    const top = has031 || has033 || has032 || has030 || eventosList[eventosList.length - 1];
+    if (top) {
+      code = top.Codigo_Evento;
+      fecha = top.Fecha_Evento;
+    }
+  }
+
+  if (code === '033') {
+    return {
+      codigo: '033',
+      descripcion: 'Aceptación Expresa',
+      fecha,
+      badgeClass: 'badge-success',
+      color: '#16a34a',
+      phase: 3,
+      isAceptada: true,
+      isReclamo: false,
+    };
+  }
+  if (code === '034') {
+    return {
+      codigo: '034',
+      descripcion: 'Aceptación Tácita',
+      fecha,
+      badgeClass: 'badge-success',
+      color: '#16a34a',
+      phase: 3,
+      isAceptada: true,
+      isReclamo: false,
+    };
+  }
+  if (code === '032') {
+    return {
+      codigo: '032',
+      descripcion: 'Recibo del Bien / Servicio',
+      fecha,
+      badgeClass: 'badge-warning',
+      color: '#d97706',
+      phase: 2,
+      isAceptada: false,
+      isReclamo: false,
+    };
+  }
+  if (code === '030') {
+    return {
+      codigo: '030',
+      descripcion: 'Acuse de Recibo',
+      fecha,
+      badgeClass: 'badge-info',
+      color: '#2563eb',
+      phase: 1,
+      isAceptada: false,
+      isReclamo: false,
+    };
+  }
+  if (code === '031') {
+    return {
+      codigo: '031',
+      descripcion: 'Reclamo de Factura',
+      fecha,
+      badgeClass: 'badge-danger',
+      color: '#dc2626',
+      phase: -1,
+      isAceptada: false,
+      isReclamo: true,
+    };
+  }
+
+  return {
+    codigo: 'N/D',
+    descripcion: 'Sin eventos DIAN',
+    fecha: undefined,
+    badgeClass: 'badge-neutral',
+    color: '#6b7280',
+    phase: 0,
+    isAceptada: false,
+    isReclamo: false,
+  };
+}
+
+/**
  * Enriquecer los registros raw de cartera con grupos comerciales, directores y clasificación
  */
 function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
@@ -212,6 +310,32 @@ function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
   const numero = raw.Numero || 0;
   const nit = String(raw.Identificacion || '').trim();
 
+  const cufe = raw.CUFE && String(raw.CUFE).trim() !== '' && raw.CUFE !== 'N/D'
+    ? String(raw.CUFE).trim()
+    : null;
+
+  const rawCorreo = raw.Correo_Cliente && String(raw.Correo_Cliente).trim() !== ''
+    ? String(raw.Correo_Cliente).trim().toLowerCase()
+    : null;
+
+  const codigoEvento = raw.Codigo_Evento_DIAN && raw.Codigo_Evento_DIAN !== 'N/D'
+    ? String(raw.Codigo_Evento_DIAN).trim()
+    : null;
+
+  const fechaEvento = raw.Fecha_Evento_DIAN && raw.Fecha_Evento_DIAN !== 'N/D'
+    ? String(raw.Fecha_Evento_DIAN).trim()
+    : null;
+
+  const eventosDian: DianEvento[] = Array.isArray(raw.Eventos_DIAN)
+    ? raw.Eventos_DIAN.map((e: any) => ({
+        Codigo_Evento: String(e.Codigo_Evento || '').trim(),
+        Descripcion_Evento: String(e.Descripcion_Evento || '').trim(),
+        Fecha_Evento: String(e.Fecha_Evento || '').trim(),
+      }))
+    : [];
+
+  const dianStatus = resolveDianStatus(codigoEvento, fechaEvento, eventosDian);
+
   return {
     Grupo_Comercial: raw.Grupo_Comercial || null,
     Nombre_Empleado: empName,
@@ -221,6 +345,7 @@ function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
     Cupo_Credito: Number(raw.Cupo_Credito) || 0,
     Estado_Cliente: String(raw.Estado_Cliente || 'Activo').trim(),
     Plazo_PagoCliente: Number(raw.Plazo_PagoCliente) || 0,
+    Correo_Cliente: rawCorreo,
     Prefijo: prefijo,
     Numero: numero,
     Tipo_Documento: String(raw.Tipo_Documento || 'Factura Venta').trim(),
@@ -231,6 +356,10 @@ function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
     Dias_Vencimiento: diasVencimiento,
     Rango_Cartera: String(raw.Rango_Cartera || '').trim(),
     Valor_Saldo: Number(raw.Valor_Saldo) || 0,
+    CUFE: cufe,
+    Codigo_Evento_DIAN: codigoEvento,
+    Fecha_Evento_DIAN: fechaEvento,
+    Eventos_DIAN: eventosDian,
     Productos: Array.isArray(raw.Productos)
       ? raw.Productos.map((p: any) => ({
           Codigo: String(p.Codigo || '').trim(),
@@ -249,6 +378,7 @@ function enrichCarteraRecord(raw: any, index: number): CarteraRecord {
     categoriaEdad,
     diasVencimientoCalc: diasVencimiento,
     estaVencida,
+    dianStatus,
   };
 }
 
@@ -398,6 +528,7 @@ export function computeCarteraMetrics(records: CarteraRecord[]): CarteraMetrics 
       cupoCredito: r.Cupo_Credito,
       estadoCliente: r.Estado_Cliente,
       plazoPago: r.Plazo_PagoCliente,
+      correoCliente: r.Correo_Cliente || null,
       totalSaldo: 0,
       totalCorriente: 0,
       totalVencido: 0,
@@ -415,6 +546,9 @@ export function computeCarteraMetrics(records: CarteraRecord[]): CarteraMetrics 
         MAS_180: 0,
       },
     };
+    if (!cust.correoCliente && r.Correo_Cliente) {
+      cust.correoCliente = r.Correo_Cliente;
+    }
     cust.totalSaldo += val;
     if (r.estaVencida) cust.totalVencido += val;
     else cust.totalCorriente += val;

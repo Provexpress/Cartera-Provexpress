@@ -142,6 +142,11 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
                   <ArrowUpDown size={12} />
                 </div>
               </th>
+              <th style={{ textAlign: 'center', width: '135px' }}>
+                <div className="th-content center">
+                  <span>Fase DIAN</span>
+                </div>
+              </th>
               <th onClick={() => handleSort('diasVencimientoCalc')} className="sortable-th" style={{ textAlign: 'center' }}>
                 <div className="th-content center">
                   <span>Estado / Días</span>
@@ -195,6 +200,25 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: 6,
+                          whiteSpace: 'nowrap',
+                          backgroundColor: r.dianStatus?.color ? `${r.dianStatus.color}15` : '#f1f5f9',
+                          color: r.dianStatus?.color || '#64748b',
+                          border: `1px solid ${r.dianStatus?.color || '#cbd5e1'}35`,
+                        }}
+                        title={r.dianStatus?.descripcion || 'Sin eventos DIAN'}
+                      >
+                        {r.dianStatus?.codigo && r.dianStatus.codigo !== 'N/D'
+                          ? `${r.dianStatus.codigo === '033' ? '✓ ' : ''}${r.dianStatus.descripcion} (${r.dianStatus.codigo})`
+                          : 'Pendiente'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span
                         className={`badge ${
                           r.estaVencida
                             ? r.diasVencimientoCalc > 180
@@ -227,7 +251,7 @@ export function CarteraTable({ records, onSelectRecord, onExportExcel }: Props) 
               })
             ) : (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
                   No se encontraron facturas con los criterios de búsqueda actuales.
                 </td>
               </tr>

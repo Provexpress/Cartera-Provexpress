@@ -17,6 +17,10 @@ import {
   Database,
   CalendarCheck,
   Download,
+  Copy,
+  Check,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import type { CarteraRecord } from '../types';
 import { formatCurrency, AGING_CONFIG } from '../lib/carteraApi';
@@ -47,6 +51,15 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
   const [gestiones, setGestiones] = useState<CarteraGestion[]>([]);
   const [loadingGestiones, setLoadingGestiones] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+  const [copiedCufe, setCopiedCufe] = useState(false);
+  const handleCopyCufe = () => {
+    if (record.CUFE) {
+      navigator.clipboard.writeText(record.CUFE);
+      setCopiedCufe(true);
+      setTimeout(() => setCopiedCufe(false), 2200);
+    }
+  };
 
   const handleExportExcel = async () => {
     try {
@@ -207,79 +220,404 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
           </div>
 
           {/* Contacto de Tesorería del Cliente */}
-          <div
-            style={{
-              margin: '16px 0 10px',
-              padding: '12px 16px',
-              backgroundColor: clientContact?.correoTesoreria ? '#f0fdf4' : '#fff7ed',
-              borderRadius: 12,
-              border: `1px solid ${clientContact?.correoTesoreria ? '#bbf7d0' : '#fed7aa'}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {(() => {
+            const hasLocalContact = Boolean(clientContact?.correoTesoreria);
+            const hasErpEmail = Boolean(record.Correo_Cliente);
+            const effectiveEmail = clientContact?.correoTesoreria || record.Correo_Cliente;
+            const isGreen = Boolean(effectiveEmail);
+
+            return (
               <div
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
-                  backgroundColor: clientContact?.correoTesoreria ? '#dcfce7' : '#ffedd5',
-                  color: clientContact?.correoTesoreria ? '#15803d' : '#c2410c',
+                  margin: '16px 0 12px',
+                  padding: '12px 16px',
+                  backgroundColor: isGreen ? '#f0fdf4' : '#fff7ed',
+                  borderRadius: 12,
+                  border: `1px solid ${isGreen ? '#bbf7d0' : '#fed7aa'}`,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
                 }}
               >
-                <Mail size={18} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      backgroundColor: isGreen ? '#dcfce7' : '#ffedd5',
+                      color: isGreen ? '#15803d' : '#c2410c',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Mail size={18} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                        Correo Tesorería / Cobro:
+                      </span>
+                      {effectiveEmail ? (
+                        <>
+                          <a
+                            href={`mailto:${effectiveEmail}`}
+                            style={{
+                              fontSize: 13,
+                              color: '#15803d',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              wordBreak: 'break-all',
+                            }}
+                            title="Enviar correo de cobro"
+                          >
+                            {effectiveEmail}
+                          </a>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              backgroundColor: hasLocalContact ? '#dbeafe' : '#fef3c7',
+                              color: hasLocalContact ? '#1e40af' : '#92400e',
+                            }}
+                          >
+                            {hasLocalContact ? 'Base Institucional' : 'Sincronizado desde ERP'}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12.5, color: '#c2410c', fontWeight: 600 }}>
+                          Sin correo registrado en ERP ni en base
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                      {clientContact?.contactoTesoreria ? `Responsable: ${clientContact.contactoTesoreria}` : ''}
+                      {clientContact?.telefonoTesoreria ? ` · Tel: ${clientContact.telefonoTesoreria}` : ''}
+                      {clientContact?.observaciones ? ` · ${clientContact.observaciones}` : ''}
+                      {!clientContact?.correoTesoreria && !hasErpEmail &&
+                        'Registre el correo para construir la base institucional y enviar notificaciones directas.'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="button button-xs button-secondary"
+                  onClick={() => setContactModalOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 10px', fontWeight: 600 }}
+                >
+                  <Edit3 size={13} />
+                  <span>{clientContact?.correoTesoreria ? 'Editar Contacto' : hasErpEmail ? 'Personalizar Contacto' : '+ Registrar Correo'}</span>
+                </button>
               </div>
+            );
+          })()}
+
+          {/* ─── SECCIÓN: FASE DE EVENTOS DIAN & CUFE ─── */}
+          <div
+            style={{
+              margin: '12px 0 16px',
+              padding: '16px 18px',
+              backgroundColor: '#f8fafc',
+              borderRadius: 14,
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+            }}
+          >
+            {/* Header del bloque DIAN: Estado y acciones */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                    Contacto Tesorería / Cobro:
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                    Trazabilidad DIAN / RADIAN:
                   </span>
-                  {clientContact?.correoTesoreria ? (
-                    <a
-                      href={`mailto:${clientContact.correoTesoreria}`}
-                      style={{
-                        fontSize: 13,
-                        color: '#15803d',
-                        fontWeight: 700,
-                        textDecoration: 'none',
-                        wordBreak: 'break-all',
-                      }}
-                      title="Enviar correo a tesorería"
-                    >
-                      {clientContact.correoTesoreria}
-                    </a>
-                  ) : (
-                    <span style={{ fontSize: 12.5, color: '#c2410c', fontWeight: 600 }}>
-                      Sin correo registrado aún
-                    </span>
-                  )}
+                  <span
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: 750,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      backgroundColor: record.dianStatus?.color ? `${record.dianStatus.color}15` : '#f1f5f9',
+                      color: record.dianStatus?.color || '#475569',
+                      border: `1px solid ${record.dianStatus?.color || '#cbd5e1'}40`,
+                    }}
+                  >
+                    {record.dianStatus?.codigo && record.dianStatus.codigo !== 'N/D'
+                      ? `${record.dianStatus.descripcion} (${record.dianStatus.codigo})`
+                      : 'Sin eventos DIAN registrados'}
+                  </span>
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                  {clientContact?.contactoTesoreria ? `Responsable: ${clientContact.contactoTesoreria}` : ''}
-                  {clientContact?.telefonoTesoreria ? ` · Tel: ${clientContact.telefonoTesoreria}` : ''}
-                  {clientContact?.observaciones ? ` · ${clientContact.observaciones}` : ''}
-                  {!clientContact?.correoTesoreria &&
-                    'Registre el correo para construir la base institucional y enviar notificaciones directas.'}
-                </div>
+                {record.dianStatus?.fecha && (
+                  <span style={{ fontSize: 11.5, color: '#64748b', display: 'block', marginTop: 3 }}>
+                    Último evento asentado el: <strong>{record.dianStatus.fecha}</strong>
+                  </span>
+                )}
               </div>
+
+              {/* Botones de acción para CUFE */}
+              {record.CUFE && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleCopyCufe}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: copiedCufe ? '#16a34a' : '#334155',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="Copiar CUFE al portapapeles"
+                  >
+                    {copiedCufe ? <Check size={12} /> : <Copy size={12} />}
+                    <span>{copiedCufe ? '¡CUFE Copiado!' : 'Copiar CUFE'}</span>
+                  </button>
+
+                  <a
+                    href={`https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${record.CUFE}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #2563eb',
+                      backgroundColor: 'rgba(37, 99, 235, 0.06)',
+                      color: '#2563eb',
+                      textDecoration: 'none',
+                    }}
+                    title="Verificar factura directamente en el catálogo público de la DIAN"
+                  >
+                    <span>Catálogo DIAN</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              className="button button-xs button-secondary"
-              onClick={() => setContactModalOpen(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 10px', fontWeight: 600 }}
+            {/* CUFE Alfanumérico */}
+            {record.CUFE ? (
+              <div
+                style={{
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  backgroundColor: '#ffffff',
+                  padding: '7px 10px',
+                  borderRadius: 8,
+                  border: '1px dashed #cbd5e1',
+                  color: '#475569',
+                  wordBreak: 'break-all',
+                  marginBottom: 14,
+                }}
+              >
+                <strong style={{ color: '#0f172a' }}>CUFE: </strong>
+                {record.CUFE}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: '#94a3b8',
+                  fontStyle: 'italic',
+                  marginBottom: 12,
+                }}
+              >
+                CUFE no reportado por el ERP para este documento.
+              </div>
+            )}
+
+            {/* Stepper Visual de Fases DIAN */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                gap: 8,
+              }}
             >
-              <Edit3 size={13} />
-              <span>{clientContact?.correoTesoreria ? 'Editar Contacto' : '+ Registrar Correo'}</span>
-            </button>
+              {/* Paso 1: Emisión */}
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid #16a34a',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <CheckCircle2 size={14} color="#16a34a" />
+                  <strong style={{ fontSize: 12, color: '#0f172a' }}>1. Emisión</strong>
+                </div>
+                <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                  Factura generada en Siesa y validada ante DIAN
+                </p>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#16a34a', display: 'block', marginTop: 4 }}>
+                  {record.Fecha_Emision ? record.Fecha_Emision.split('T')[0] : 'Emitida'}
+                </span>
+              </div>
+
+              {/* Paso 2: Acuse de Recibo (030) */}
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  backgroundColor: '#ffffff',
+                  border: `1.5px solid ${(record.dianStatus?.phase || 0) >= 1 ? '#2563eb' : '#e2e8f0'}`,
+                  opacity: (record.dianStatus?.phase || 0) >= 1 ? 1 : 0.65,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  {(record.dianStatus?.phase || 0) >= 1 ? (
+                    <CheckCircle2 size={14} color="#2563eb" />
+                  ) : (
+                    <Clock size={14} color="#94a3b8" />
+                  )}
+                  <strong style={{ fontSize: 12, color: '#0f172a' }}>2. Acuse (030)</strong>
+                </div>
+                <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                  Recepción formal de la factura por el cliente
+                </p>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: (record.dianStatus?.phase || 0) >= 1 ? '#2563eb' : '#94a3b8',
+                    display: 'block',
+                    marginTop: 4,
+                  }}
+                >
+                  {(record.dianStatus?.phase || 0) >= 1
+                    ? record.dianStatus?.codigo === '030'
+                      ? record.dianStatus.fecha || 'Confirmado'
+                      : 'Confirmado'
+                    : 'Pendiente'}
+                </span>
+              </div>
+
+              {/* Paso 3: Recibo del Bien / Servicio (032) */}
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  backgroundColor: '#ffffff',
+                  border: `1.5px solid ${(record.dianStatus?.phase || 0) >= 2 ? '#d97706' : '#e2e8f0'}`,
+                  opacity: (record.dianStatus?.phase || 0) >= 2 ? 1 : 0.65,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  {(record.dianStatus?.phase || 0) >= 2 ? (
+                    <CheckCircle2 size={14} color="#d97706" />
+                  ) : (
+                    <Clock size={14} color="#94a3b8" />
+                  )}
+                  <strong style={{ fontSize: 12, color: '#0f172a' }}>3. Recibo Bienes (032)</strong>
+                </div>
+                <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                  Entrega a satisfacción de productos o servicios
+                </p>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: (record.dianStatus?.phase || 0) >= 2 ? '#d97706' : '#94a3b8',
+                    display: 'block',
+                    marginTop: 4,
+                  }}
+                >
+                  {(record.dianStatus?.phase || 0) >= 2
+                    ? record.dianStatus?.codigo === '032'
+                      ? record.dianStatus.fecha || 'Recibido'
+                      : 'Recibido'
+                    : 'Pendiente'}
+                </span>
+              </div>
+
+              {/* Paso 4: Aceptación (033 / 034) o Reclamo (031) */}
+              {record.dianStatus?.isReclamo ? (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    backgroundColor: '#fef2f2',
+                    border: '1.5px solid #dc2626',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    <AlertCircle size={14} color="#dc2626" />
+                    <strong style={{ fontSize: 12, color: '#991b1b' }}>4. Reclamo (031)</strong>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#b91c1c', margin: 0 }}>
+                    Factura con objeción o reclamo registrado
+                  </p>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: '#dc2626', display: 'block', marginTop: 4 }}>
+                    {record.dianStatus.fecha || 'Reclamada'}
+                  </span>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    backgroundColor: record.dianStatus?.isAceptada ? '#f0fdf4' : '#ffffff',
+                    border: `1.5px solid ${record.dianStatus?.isAceptada ? '#16a34a' : '#e2e8f0'}`,
+                    opacity: record.dianStatus?.isAceptada ? 1 : 0.65,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    {record.dianStatus?.isAceptada ? (
+                      <CheckCircle2 size={14} color="#16a34a" />
+                    ) : (
+                      <Clock size={14} color="#94a3b8" />
+                    )}
+                    <strong style={{ fontSize: 12, color: '#0f172a' }}>
+                      4. {record.Codigo_Evento_DIAN === '034' ? 'Aceptación Tácita (034)' : 'Aceptación (033)'}
+                    </strong>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                    {record.dianStatus?.isAceptada
+                      ? 'Título valor exigible ante la ley'
+                      : 'Pendiente de aceptación del cliente'}
+                  </p>
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      color: record.dianStatus?.isAceptada ? '#16a34a' : '#94a3b8',
+                      display: 'block',
+                      marginTop: 4,
+                    }}
+                  >
+                    {record.dianStatus?.isAceptada
+                      ? record.dianStatus.fecha || 'Aceptada'
+                      : 'En espera'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Selector de Pestañas: Productos vs Bitácora de Cobro */}

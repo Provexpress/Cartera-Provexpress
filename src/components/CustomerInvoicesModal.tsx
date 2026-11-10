@@ -188,65 +188,88 @@ export function CustomerInvoicesModal({
         </div>
 
         {/* ─── STRIP DE CONTACTO DE TESORERÍA ─── */}
-        <div
-          style={{
-            padding: '11px 24px',
-            backgroundColor: contact?.correoTesoreria ? '#f0fdf4' : '#fffbeb',
-            borderBottom: `1px solid ${contact?.correoTesoreria ? '#bbf7d0' : '#fde68a'}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-            <Mail size={15} color={contact?.correoTesoreria ? '#16a34a' : '#d97706'} />
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>
-              Correo de Tesorería:{' '}
-              {contact?.correoTesoreria ? (
-                <a
-                  href={`mailto:${contact.correoTesoreria}`}
-                  style={{ color: '#15803d', fontWeight: 700, textDecoration: 'none' }}
-                >
-                  {contact.correoTesoreria}
-                </a>
-              ) : (
-                <span style={{ color: '#b45309', fontStyle: 'italic' }}>Sin registrar en la base</span>
-              )}
-            </span>
-            {contact?.contactoTesoreria && (
-              <span style={{ fontSize: 12, color: '#64748b' }}>
-                · {contact.contactoTesoreria}
-              </span>
-            )}
-            {contact?.telefonoTesoreria && (
-              <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
-                · Tel: {contact.telefonoTesoreria}
-              </span>
-            )}
-          </div>
+        {(() => {
+          const hasLocal = Boolean(contact?.correoTesoreria);
+          const hasErp = Boolean(customer.correoCliente);
+          const effectiveEmail = contact?.correoTesoreria || customer.correoCliente;
 
-          {onEditContact && (
-            <button
-              type="button"
-              onClick={onEditContact}
+          return (
+            <div
               style={{
-                background: 'none',
-                border: 'none',
-                color: '#2563eb',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                padding: '2px 4px',
-                whiteSpace: 'nowrap',
+                padding: '11px 24px',
+                backgroundColor: effectiveEmail ? '#f0fdf4' : '#fffbeb',
+                borderBottom: `1px solid ${effectiveEmail ? '#bbf7d0' : '#fde68a'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 10,
               }}
             >
-              {contact?.correoTesoreria ? 'Editar Contacto' : '+ Registrar Correo'}
-            </button>
-          )}
-        </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                <Mail size={15} color={effectiveEmail ? '#16a34a' : '#d97706'} />
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>
+                  Correo de Tesorería:{' '}
+                  {effectiveEmail ? (
+                    <>
+                      <a
+                        href={`mailto:${effectiveEmail}`}
+                        style={{ color: '#15803d', fontWeight: 700, textDecoration: 'none' }}
+                      >
+                        {effectiveEmail}
+                      </a>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          marginLeft: 6,
+                          backgroundColor: hasLocal ? '#dbeafe' : '#fef3c7',
+                          color: hasLocal ? '#1e40af' : '#92400e',
+                        }}
+                      >
+                        {hasLocal ? 'Base Institucional' : 'Sincronizado desde ERP'}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ color: '#b45309', fontStyle: 'italic' }}>Sin registrar en la base ni en ERP</span>
+                  )}
+                </span>
+                {contact?.contactoTesoreria && (
+                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                    · {contact.contactoTesoreria}
+                  </span>
+                )}
+                {contact?.telefonoTesoreria && (
+                  <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
+                    · Tel: {contact.telefonoTesoreria}
+                  </span>
+                )}
+              </div>
+
+              {onEditContact && (
+                <button
+                  type="button"
+                  onClick={onEditContact}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563eb',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: '2px 4px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {hasLocal ? 'Editar Contacto' : hasErp ? 'Personalizar Contacto' : '+ Registrar Correo'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ─── TARJETAS RESUMEN FINANCIERO ─── */}
         <div
@@ -379,7 +402,8 @@ export function CustomerInvoicesModal({
                 <th style={{ textAlign: 'left', padding: '10px 12px', minWidth: 140, backgroundColor: '#f8fafc' }}>Documento</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px', minWidth: 105, backgroundColor: '#f8fafc' }}>Emisión</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px', minWidth: 105, backgroundColor: '#f8fafc' }}>Vencimiento</th>
-                <th style={{ textAlign: 'center', padding: '10px 12px', minWidth: 130, backgroundColor: '#f8fafc' }}>Estado / Mora</th>
+                <th style={{ textAlign: 'center', padding: '10px 12px', minWidth: 135, backgroundColor: '#f8fafc' }}>Fase DIAN</th>
+                <th style={{ textAlign: 'center', padding: '10px 12px', minWidth: 120, backgroundColor: '#f8fafc' }}>Estado / Mora</th>
                 <th style={{ textAlign: 'right', padding: '10px 12px', minWidth: 140, backgroundColor: '#f8fafc' }}>Saldo Pendiente</th>
                 <th style={{ textAlign: 'center', padding: '10px 12px', minWidth: 110, backgroundColor: '#f8fafc' }}>Acción</th>
               </tr>
@@ -387,7 +411,7 @@ export function CustomerInvoicesModal({
             <tbody>
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 10px', color: '#64748b', backgroundColor: '#ffffff' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px 10px', color: '#64748b', backgroundColor: '#ffffff' }}>
                     <FileText size={30} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
                     <p style={{ margin: 0, fontWeight: 600 }}>No hay facturas con el criterio seleccionado.</p>
                   </td>
@@ -411,6 +435,25 @@ export function CustomerInvoicesModal({
                     </td>
                     <td style={{ padding: '10px 12px', fontSize: 12.5, color: '#475569' }}>
                       {inv.Fecha_Vencimiento ? inv.Fecha_Vencimiento.split('T')[0] : 'N/A'}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: 6,
+                          whiteSpace: 'nowrap',
+                          backgroundColor: inv.dianStatus?.color ? `${inv.dianStatus.color}15` : '#f1f5f9',
+                          color: inv.dianStatus?.color || '#64748b',
+                          border: `1px solid ${inv.dianStatus?.color || '#cbd5e1'}35`,
+                        }}
+                        title={inv.dianStatus?.descripcion || 'Sin eventos DIAN'}
+                      >
+                        {inv.dianStatus?.codigo && inv.dianStatus.codigo !== 'N/D'
+                          ? `${inv.dianStatus.codigo === '033' ? '✓ ' : ''}${inv.dianStatus.descripcion} (${inv.dianStatus.codigo})`
+                          : 'Pendiente'}
+                      </span>
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <span

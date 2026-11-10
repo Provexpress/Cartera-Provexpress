@@ -15,6 +15,23 @@ export interface CarteraProducto {
   Valor_Total: number;
 }
 
+export interface DianEvento {
+  Codigo_Evento: string;
+  Descripcion_Evento: string;
+  Fecha_Evento: string;
+}
+
+export interface DianStatusInfo {
+  codigo: string;
+  descripcion: string;
+  fecha?: string;
+  badgeClass: string;
+  color: string;
+  phase: number; // 0: Emitida / N/D, 1: Acuse (030), 2: Recibo Bienes (032), 3: Aceptada (033/034), -1: Reclamo (031)
+  isAceptada: boolean;
+  isReclamo: boolean;
+}
+
 export interface CarteraRecord {
   Grupo_Comercial: string | null;
   Nombre_Empleado: string;
@@ -24,6 +41,7 @@ export interface CarteraRecord {
   Cupo_Credito: number;
   Estado_Cliente: string;
   Plazo_PagoCliente: number;
+  Correo_Cliente?: string | null;
   Prefijo: string;
   Numero: number;
   Tipo_Documento: string;
@@ -34,6 +52,10 @@ export interface CarteraRecord {
   Dias_Vencimiento: number;
   Rango_Cartera: string;
   Valor_Saldo: number;
+  CUFE?: string | null;
+  Codigo_Evento_DIAN?: string | null;
+  Fecha_Evento_DIAN?: string | null;
+  Eventos_DIAN?: DianEvento[];
   Productos: CarteraProducto[];
   // Campos calculados y enriquecidos
   id: string;
@@ -45,6 +67,7 @@ export interface CarteraRecord {
   categoriaEdad: AgeBucketKey;
   diasVencimientoCalc: number;
   estaVencida: boolean;
+  dianStatus?: DianStatusInfo;
 }
 
 export interface ReciboCajaRecord {
@@ -147,6 +170,7 @@ export interface CustomerSummary {
   cupoCredito: number;
   estadoCliente: string;
   plazoPago: number;
+  correoCliente?: string | null;
   totalSaldo: number;
   totalCorriente: number;
   totalVencido: number;

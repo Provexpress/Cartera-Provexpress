@@ -298,6 +298,11 @@ export async function generateCarteraExcel(
     { header: 'Días Vencido', key: 'diasVencido', width: 12, isNumber: true },
     { header: 'Rango Antigüedad', key: 'rango', width: 18, isCenter: true },
     { header: 'Saldo Pendiente', key: 'saldo', width: 18, isCurrency: true, isBold: true },
+    { header: 'Fase DIAN', key: 'faseDian', width: 24, isCenter: true },
+    { header: 'Código Evento DIAN', key: 'codigoDian', width: 18, isCenter: true },
+    { header: 'Fecha Evento DIAN', key: 'fechaDian', width: 18, isCenter: true },
+    { header: 'Correo Cliente (ERP)', key: 'correoCliente', width: 34 },
+    { header: 'CUFE', key: 'cufe', width: 44 },
   ];
   wsDetail.columns = detailCols;
 
@@ -320,6 +325,11 @@ export async function generateCarteraExcel(
       diasVencido: r.Dias_Vencimiento,
       rango: r.categoriaEdad === 'CORRIENTE' ? 'Corriente (0 d)' : r.Rango_Cartera || 'Vencido',
       saldo: r.Valor_Saldo,
+      faseDian: r.dianStatus ? r.dianStatus.descripcion : 'Sin eventos (N/D)',
+      codigoDian: r.Codigo_Evento_DIAN || 'N/D',
+      fechaDian: r.Fecha_Evento_DIAN ? r.Fecha_Evento_DIAN.split('T')[0] : '',
+      correoCliente: r.Correo_Cliente || '',
+      cufe: r.CUFE || '',
     });
   });
 
@@ -1408,7 +1418,10 @@ export async function generateCustomerDirectoryExcel(
   const totalDocs = customers.reduce((s, c) => s + c.docCount, 0);
   const clientesConCorreo = customers.filter((c) => {
     const ct = contacts[c.nit];
-    return Boolean(ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0);
+    return Boolean(
+      (ct && ct.correoTesoreria && ct.correoTesoreria.trim().length > 0) ||
+      (c.correoCliente && c.correoCliente.trim().length > 0)
+    );
   }).length;
   const pctCobertura = customers.length > 0 ? (clientesConCorreo / customers.length) * 100 : 0;
 
@@ -1474,7 +1487,7 @@ export async function generateCustomerDirectoryExcel(
       saldoVencido: c.totalVencido,
       pctVencido: pctVenc,
       docCount: c.docCount,
-      correoTesoreria: contact?.correoTesoreria || '',
+      correoTesoreria: contact?.correoTesoreria || c.correoCliente || '',
       contactoTesoreria: contact?.contactoTesoreria || '',
       telefonoTesoreria: contact?.telefonoTesoreria || '',
       observaciones: contact?.observaciones || '',

@@ -33,7 +33,9 @@ export function ClientContactModal({
   onSaved,
 }: Props) {
   useModalScrollLock(true, onClose);
-  const [correo, setCorreo] = useState(existingContact?.correoTesoreria || '');
+  const [correo, setCorreo] = useState(
+    existingContact?.correoTesoreria || customer.correoCliente || ''
+  );
   const [contacto, setContacto] = useState(existingContact?.contactoTesoreria || '');
   const [telefono, setTelefono] = useState(existingContact?.telefonoTesoreria || '');
   const [observaciones, setObservaciones] = useState(existingContact?.observaciones || '');
@@ -284,6 +286,37 @@ export function ClientContactModal({
               <span style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, display: 'block' }}>
                 Puede ingresar varios correos separándolos por coma (,) o punto y coma (;).
               </span>
+              {customer.correoCliente && !existingContact?.correoTesoreria && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    backgroundColor: '#e0f2fe',
+                    border: '1px solid #bae6fd',
+                    fontSize: 11.5,
+                    color: '#0369a1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    className="badge"
+                    style={{
+                      backgroundColor: '#0284c7',
+                      color: '#ffffff',
+                      fontSize: 9.5,
+                      padding: '2px 6px',
+                      fontWeight: 700,
+                      borderRadius: 4,
+                    }}
+                  >
+                    ERP Siesa
+                  </span>
+                  <span>Prellenado con el correo de tesorería/contabilidad registrado en Siesa.</span>
+                </div>
+              )}
             </div>
 
             {/* NOMBRE DE CONTACTO */}
