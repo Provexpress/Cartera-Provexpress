@@ -584,19 +584,19 @@ export function DianNotificationModal({
             {/* 1. 031 Reclamo */}
             <div
               style={{
-                background: '#FEF2F2',
-                border: '1.5px solid #FECACA',
+                background: '#F8FAFC',
+                border: '1.5px solid #CBD5E1',
                 borderRadius: 10,
                 padding: '10px 12px',
               }}
             >
-              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#991B1B', textTransform: 'uppercase' }}>
-                🚨 Reclamo (031)
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#003366', textTransform: 'uppercase' }}>
+                📋 Reclamo (031)
               </div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: '#DC2626', marginTop: 3 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: '#003366', marginTop: 3 }}>
                 {dianStats.totReclamos} facturas
               </div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#991B1B' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#475569' }}>
                 {formatCOP(dianStats.valReclamos)}
               </div>
             </div>

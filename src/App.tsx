@@ -885,13 +885,13 @@ export function App() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 5,
-                borderColor: reclamosDianCount > 0 ? '#FECACA' : undefined,
-                background: reclamosDianCount > 0 ? '#FEF2F2' : undefined,
-                color: reclamosDianCount > 0 ? '#DC2626' : undefined,
+                borderColor: '#BFDBFE',
+                background: '#F0F7FF',
+                color: '#003366',
                 fontWeight: 650,
               }}
             >
-              <ShieldAlert size={13} color={reclamosDianCount > 0 ? '#DC2626' : undefined} />
+              <ShieldAlert size={13} color="#003366" />
               <span>Notificar DIAN</span>
               {reclamosDianCount > 0 && (
                 <span
@@ -902,7 +902,7 @@ export function App() {
                     minWidth: 16,
                     height: 16,
                     borderRadius: 999,
-                    background: '#DC2626',
+                    background: '#003366',
                     color: '#ffffff',
                     fontSize: 10,
                     fontWeight: 800,

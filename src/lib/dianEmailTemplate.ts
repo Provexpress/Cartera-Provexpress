@@ -195,25 +195,25 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
     formattedCutoff = summary.cutoffDate;
   }
 
-  // Filas de las 8 facturas en reclamo
+  // Filas de las 8 facturas en reclamo (Colores corporativos Provexpress: Navy Blue, Slate y Neutral)
   const rowsReclamosHtml = summary.reclamosList
     .map((rec, i) => {
-      const bg = i % 2 === 0 ? '#FFFFFF' : '#FEF2F2';
+      const bg = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
       return `
-      <tr style="background-color: ${bg}; border-bottom: 1px solid #FECACA;">
-        <td style="padding: 7px 10px; font-size: 11.5px; font-weight: 800; color: #DC2626; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
+      <tr style="background-color: ${bg}; border-bottom: 1px solid #E2E8F0;">
+        <td style="padding: 8px 10px; font-size: 11.5px; font-weight: 800; color: #003366; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
           ${rec.factura}
         </td>
-        <td style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; color: #0F172A; font-family: 'Segoe UI', Arial, sans-serif;">
+        <td style="padding: 8px 10px; font-size: 11.5px; font-weight: 700; color: #0F172A; font-family: 'Segoe UI', Arial, sans-serif;">
           ${rec.cliente}
         </td>
-        <td style="padding: 7px 10px; font-size: 11px; color: #475569; font-family: 'Segoe UI', Arial, sans-serif;">
+        <td style="padding: 8px 10px; font-size: 11px; color: #475569; font-family: 'Segoe UI', Arial, sans-serif;">
           ${rec.comercial}
         </td>
-        <td style="padding: 7px 10px; font-size: 11px; color: #64748B; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
+        <td style="padding: 8px 10px; font-size: 11px; color: #64748B; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
           ${rec.fechaReclamo}
         </td>
-        <td style="padding: 7px 10px; font-size: 12px; font-weight: 900; color: #DC2626; text-align: right; font-family: 'Segoe UI', Arial, sans-serif;">
+        <td style="padding: 8px 12px; font-size: 12px; font-weight: 850; color: #003366; text-align: right; font-family: 'Segoe UI', Arial, sans-serif;">
           ${formatCOP(rec.saldo)}
         </td>
       </tr>
@@ -236,8 +236,8 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
         <td style="padding: 8px 8px; text-align: center; font-size: 12px; font-weight: 800; color: #0F172A; font-family: 'Segoe UI', Arial, sans-serif;">
           ${formatNumber(g.totalCount)}
         </td>
-        <td style="padding: 8px 8px; text-align: center; font-size: 12px; font-weight: 800; color: ${g.c031 > 0 ? '#DC2626' : '#94A3B8'}; font-family: 'Segoe UI', Arial, sans-serif; background-color: ${g.c031 > 0 ? '#FEE2E2' : 'transparent'};">
-          ${g.c031 > 0 ? `🚨 ${g.c031}` : '0'}
+        <td style="padding: 8px 8px; text-align: center; font-size: 12px; font-weight: 800; color: ${g.c031 > 0 ? '#003366' : '#94A3B8'}; font-family: 'Segoe UI', Arial, sans-serif; background-color: ${g.c031 > 0 ? '#F1F5F9' : 'transparent'}; border-radius: 4px;">
+          ${g.c031 > 0 ? g.c031 : '0'}
         </td>
         <td style="padding: 8px 8px; text-align: center; font-size: 12px; font-weight: 700; color: #D97706; font-family: 'Segoe UI', Arial, sans-serif;">
           ${formatNumber(g.cND)}
@@ -326,20 +326,20 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
         <!-- 2. 5 TARJETAS KPI CONCISAS DE EVENTOS DIAN -->
         <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 18px;">
           <tr>
-            <!-- KPI 1: 031 RECLAMOS -->
+            <!-- KPI 1: 031 RECLAMOS (Colores corporativos Provexpress: Navy Blue) -->
             <td width="20%" valign="top" class="kpi-cell" style="padding-right: 6px;">
-              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #FEF2F2; border: 1.5px solid #FECACA; border-radius: 10px; padding: 10px 8px; height: 86px;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 10px 8px; height: 86px;">
                 <tr>
-                  <td valign="top" style="font-size: 10px; color: #991B1B; font-weight: 800; text-transform: uppercase;">
-                    🚨 Reclamos (031)
+                  <td valign="top" style="font-size: 10px; color: #003366; font-weight: 800; text-transform: uppercase;">
+                    📋 Reclamos (031)
                   </td>
                 </tr>
                 <tr>
                   <td valign="bottom" style="padding-top: 4px;">
-                    <div style="font-size: 18px; font-weight: 900; color: #DC2626; line-height: 1;">
+                    <div style="font-size: 18px; font-weight: 900; color: #003366; line-height: 1;">
                       ${summary.totReclamos} facturas
                     </div>
-                    <div style="font-size: 11.5px; font-weight: 700; color: #991B1B; margin-top: 3px;">
+                    <div style="font-size: 11.5px; font-weight: 700; color: #475569; margin-top: 3px;">
                       ${formatCOP(summary.valReclamos)}
                     </div>
                   </td>
@@ -433,29 +433,32 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
           </tr>
         </table>
 
-        <!-- 3. ALERTA EJECUTIVA: DETALLE DE LAS 8 FACTURAS EN RECLAMO (031) -->
+        <!-- 3. DETALLE DE LAS 8 FACTURAS EN RECLAMO (031) - FORMATO PROVEXPRESS -->
         ${summary.totReclamos > 0 ? `
         <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 6px;">
           <tr>
             <td>
-              <span style="font-size: 13.5px; font-weight: 900; color: #DC2626; font-family: 'Segoe UI', Arial, sans-serif;">
-                🚨 Atención Prioritaria: ${summary.totReclamos} Facturas en Reclamo Comercial (Devueltas ante la DIAN)
+              <span style="font-size: 13.5px; font-weight: 850; color: #003366; font-family: 'Segoe UI', Arial, sans-serif;">
+                📋 Facturas con Reclamo Comercial (Evento DIAN 031)
               </span>
-              <span style="font-size: 11px; color: #64748B; margin-left: 10px;">
-                Clientes que registraron evento 031. Requieren nota crédito o refacturación inmediata.
+              <span style="display: inline-block; background-color: #EFF6FF; border: 1px solid #BFDBFE; color: #003366; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 8px;">
+                ${summary.totReclamos} facturas devueltas · ${formatCOP(summary.valReclamos)}
               </span>
+              <div style="font-size: 11px; color: #64748B; margin-top: 2px;">
+                Facturas devueltas por el cliente ante la DIAN que requieren refacturación o nota crédito.
+              </div>
             </td>
           </tr>
         </table>
 
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #FECACA; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1.5px solid #003366; border-radius: 8px; overflow: hidden; border-collapse: separate; border-spacing: 0; margin-bottom: 18px;">
           <thead>
-            <tr style="background-color: #DC2626; color: #FFFFFF;">
-              <th style="padding: 7px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Factura</th>
-              <th style="padding: 7px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Cliente / Razón Social</th>
-              <th style="padding: 7px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Ejecutivo Asignado</th>
-              <th style="padding: 7px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 95px;">Fecha Reclamo</th>
-              <th style="padding: 7px 10px; text-align: right; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 110px;">Saldo ($ COP)</th>
+            <tr style="background: linear-gradient(135deg, #003366 0%, #1E3A8A 100%); color: #FFFFFF;">
+              <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 85px;">Factura</th>
+              <th style="padding: 8px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;">Cliente / Razón Social</th>
+              <th style="padding: 8px 10px; text-align: left; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 140px;">Ejecutivo Asignado</th>
+              <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 95px;">Fecha Reclamo</th>
+              <th style="padding: 8px 12px; text-align: right; font-size: 10.5px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif; width: 110px;">Saldo ($ COP)</th>
             </tr>
           </thead>
           <tbody>
@@ -494,7 +497,7 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
             <tr style="background-color: #F1F5F9; border-top: 2px solid #CBD5E1;">
               <td style="padding: 9px 12px; font-size: 12px; font-weight: 900; color: #0F172A;">TOTAL COMPAÑÍA</td>
               <td style="padding: 9px 8px; text-align: center; font-size: 12.5px; font-weight: 900; color: #0F172A;">${formatNumber(summary.totalCount)}</td>
-              <td style="padding: 9px 8px; text-align: center; font-size: 12px; font-weight: 900; color: #DC2626;">${summary.totReclamos}</td>
+              <td style="padding: 9px 8px; text-align: center; font-size: 12px; font-weight: 900; color: #003366;">${summary.totReclamos}</td>
               <td style="padding: 9px 8px; text-align: center; font-size: 12px; font-weight: 900; color: #D97706;">${formatNumber(summary.totSinAcuse)}</td>
               <td style="padding: 9px 8px; text-align: center; font-size: 12px; font-weight: 900; color: #15803D;">${formatNumber(summary.totAceptadas)}</td>
               <td style="padding: 9px 12px; text-align: right; font-size: 13px; font-weight: 950; color: #0F172A;">${formatCOP(summary.totalValue)}</td>
@@ -523,13 +526,13 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
           <tr>
             <td width="30" valign="middle" align="center" style="font-size: 18px; padding-top: 6px;">⏳</td>
             <td valign="middle" style="padding-top: 6px;">
-              <span style="font-size: 10.5px; font-weight: 700; color: #DC2626; text-transform: uppercase;">Mayor Mora:</span>
+              <span style="font-size: 10.5px; font-weight: 700; color: #003366; text-transform: uppercase;">Mayor Mora:</span>
               <strong style="font-size: 12px; color: #0F172A; margin-left: 4px;">${summary.topMayorMora.Prefijo} ${summary.topMayorMora.Numero}</strong>
               <span style="font-size: 11.5px; color: #475569; margin-left: 6px;">${summary.topMayorMora.Empresa}</span>
-              <span style="font-size: 11px; color: #DC2626; font-weight: 700; margin-left: 6px;">${summary.topMayorMora.Dias_Vencimiento} días vencida</span>
+              <span style="font-size: 11px; color: #003366; font-weight: 700; margin-left: 6px;">${summary.topMayorMora.Dias_Vencimiento} días vencida</span>
             </td>
             <td align="right" valign="middle" style="padding-top: 6px;">
-              <span style="font-size: 12.5px; font-weight: 800; color: #DC2626;">${formatCOP(summary.topMayorMora.Valor_Saldo)}</span>
+              <span style="font-size: 12.5px; font-weight: 800; color: #003366;">${formatCOP(summary.topMayorMora.Valor_Saldo)}</span>
             </td>
           </tr>
           ` : ''}
