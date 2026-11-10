@@ -197,7 +197,7 @@ export function getGroupLabel(groupNumber: number): string {
 }
 
 /**
- * Resuelve el estado DIAN de una factura según el código de evento o lista de eventos RADIAN
+ * Resuelve el estado DIAN de una factura según el código de evento o lista de eventos DIAN
  */
 export function resolveDianStatus(
   codigoRaw?: string | null,

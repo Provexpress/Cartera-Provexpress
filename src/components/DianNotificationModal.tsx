@@ -505,7 +505,7 @@ export function DianNotificationModal({
               <ShieldAlert size={22} />
             </div>
             <div>
-              <h3>Consola de Notificación · Trazabilidad DIAN & RADIAN</h3>
+              <h3>Consola de Notificación · Eventos DIAN</h3>
               <div className="dispatch-header-meta">
                 <span className="badge-cutoff">Corte: {carteraData.fechaCorte}</span>
                 <span className="meta-divider">•</span>

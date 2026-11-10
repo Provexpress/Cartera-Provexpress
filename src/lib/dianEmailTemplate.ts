@@ -258,7 +258,7 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Informe Gerencial DIAN & RADIAN · Provexpress SAS</title>
+  <title>Consolidado Estado Facturación Eventos DIAN · Provexpress SAS</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -298,23 +298,23 @@ export function generateDianEmailHtml(summary: DianEmailSummary): string {
                 <span style="display: inline-block; margin-left: 6px; font-size: 10.5px; background-color: #EFF6FF; color: #1E3A8A; padding: 2px 7px; border-radius: 999px; font-weight: 700;">${summary.recipientCargo}</span>
               </div>
               <h1 style="margin: 2px 0 4px 0; font-size: 21px; font-weight: 900; color: #0F172A; line-height: 1.2; letter-spacing: -0.02em; font-family: 'Segoe UI', Arial, sans-serif;">
-                Consolidado de Trazabilidad DIAN & RADIAN<br>
-                <span style="color: #0284C7;">Estado Legal de Facturación</span> · Corte ${formattedCutoff}
+                Consolidado Estado Facturación<br>
+                <span style="color: #003366;">Eventos DIAN</span> · Corte ${formattedCutoff}
               </h1>
               <p style="margin: 0; font-size: 11.5px; color: #475569; line-height: 1.35; font-family: 'Segoe UI', Arial, sans-serif;">
-                Monitoreo ejecutivo de eventos DIAN (Acuse, Recibo de Mercancía, Reclamos y Aceptación de Títulos Valor) en la cartera activa de Provexpress SAS.
+                Monitoreo ejecutivo de eventos DIAN (Acuse, Recibo de Mercancía, Reclamos y Aceptación) en la cartera activa de Provexpress SAS.
               </p>
             </td>
             <td width="115" valign="middle" align="right">
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; padding: 10px 8px; width: 110px; text-align: center;">
                 <tr>
                   <td align="center">
-                    <div style="background-color: #0284C7; color: #FFFFFF; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 900; line-height: 24px; margin: 0 auto 5px auto;">
+                    <div style="background-color: #003366; color: #FFFFFF; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 900; line-height: 24px; margin: 0 auto 5px auto;">
                       ✓
                     </div>
                     <div style="font-size: 10.5px; font-weight: 700; color: #1E293B; line-height: 1.25; font-family: 'Segoe UI', Arial, sans-serif;">
                       Control Legal<br>
-                      <strong style="color: #0284C7;">RADIAN</strong>
+                      <strong style="color: #003366;">DIAN</strong>
                     </div>
                   </td>
                 </tr>

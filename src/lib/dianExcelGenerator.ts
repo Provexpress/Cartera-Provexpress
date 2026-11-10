@@ -13,7 +13,7 @@ const BORDER_THIN = {
 };
 
 /**
- * Genera el libro Excel maestro de Trazabilidad DIAN / RADIAN con 3 hojas:
+ * Genera el libro Excel maestro de Eventos DIAN con 3 hojas:
  * 1. Resumen Estados DIAN & Matriz por Grupo
  * 2. Reclamos (031) y Alertas Críticas sin Acuse
  * 3. Detalle General de Facturas con CUFE y Códigos DIAN
@@ -77,7 +77,7 @@ export async function generateDianReportExcel(
   // Banner institucional superior
   ws1.mergeCells('B2:H2');
   const t1 = ws1.getCell('B2');
-  t1.value = 'PROVEXPRESS S.A.S.  —  INFORME CONSOLIDADO TRAZABILIDAD DIAN & RADIAN';
+  t1.value = 'PROVEXPRESS S.A.S.  —  INFORME CONSOLIDADO EVENTOS DIAN';
   t1.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   t1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
   t1.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -115,7 +115,7 @@ export async function generateDianReportExcel(
     ['⚠️ Sin Acuse de Recibo Registrado', 'N/D', totSinAcuse, valSinAcuse, totalSaldo > 0 ? valSinAcuse / totalSaldo : 0, 'Prioritario: Cliente no ha registrado acuse'],
     ['⏳ Acuse de Recibo de Factura Electrónica', '030', totAcuse, valAcuse, totalSaldo > 0 ? valAcuse / totalSaldo : 0, 'En trámite: Pendiente recibo de bienes'],
     ['📦 Recibo del Bien y/o Prestación del Servicio', '032', totRecibo, valRecibo, totalSaldo > 0 ? valRecibo / totalSaldo : 0, 'Pre-aceptación: Mercancía/servicio recibido'],
-    ['✅ Aceptación Expresa / Tácita (Radian)', '033 / 034', totAceptadas, valAceptadas, totalSaldo > 0 ? valAceptadas / totalSaldo : 0, 'Título Valor Pleno: Exigible jurídicamente'],
+    ['✅ Aceptación Expresa / Tácita', '033 / 034', totAceptadas, valAceptadas, totalSaldo > 0 ? valAceptadas / totalSaldo : 0, 'Factura Aceptada ante la DIAN'],
   ];
 
   dianRows.forEach((row, idx) => {

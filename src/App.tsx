@@ -879,7 +879,7 @@ export function App() {
               type="button"
               className="button button-sm button-secondary"
               onClick={() => setDianModalOpen(true)}
-              title="Consola de despacho y trazabilidad de eventos DIAN & RADIAN"
+              title="Consola de despacho y estado de eventos DIAN"
               style={{
                 position: 'relative',
                 display: 'inline-flex',

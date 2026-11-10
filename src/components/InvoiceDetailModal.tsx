@@ -385,7 +385,7 @@ export function InvoiceDetailModal({ record, currentUser, onClose }: Props) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
-                    Trazabilidad DIAN / RADIAN:
+                    Trazabilidad Eventos DIAN:
                   </span>
                   <span
                     style={{
